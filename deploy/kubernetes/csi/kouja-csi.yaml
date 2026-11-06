@@ -1,0 +1,305 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kouja-csi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kouja-csi-controller
+  namespace: kouja-csi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kouja-csi-node
+  namespace: kouja-csi
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kouja-csi-controller
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims/status"]
+    verbs: ["update", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments/status"]
+    verbs: ["update", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csinodes", "csidrivers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["kouja.io"]
+    resources: ["koujavolumeplacements", "koujavolumeplacements/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kouja-csi-node
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csinodes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kouja-csi-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kouja-csi-controller
+subjects:
+  - kind: ServiceAccount
+    name: kouja-csi-controller
+    namespace: kouja-csi
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kouja-csi-node
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kouja-csi-node
+subjects:
+  - kind: ServiceAccount
+    name: kouja-csi-node
+    namespace: kouja-csi
+---
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: kouja.csi.voidstarit.com
+spec:
+  attachRequired: true
+  podInfoOnMount: false
+  volumeLifecycleModes:
+    - Persistent
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: kouja-e2e
+provisioner: kouja.csi.voidstarit.com
+parameters:
+  vg: kouja-e2e
+  protocol: iscsi
+  initiator: iqn.2026-11.io.kouja:kind-node
+  csi.storage.k8s.io/fstype: ext4
+  forceReattach: "false"
+  nodeFailurePolicy: wait
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+---
+# Every node that runs this class must have ktls-utils installed and tlshd
+# active. The node plugin installs the per-attachment PSK; the host tlshd
+# performs the initiator-side TLS 1.3 handshake.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: kouja-nvme
+provisioner: kouja.csi.voidstarit.com
+parameters:
+  vg: kouja-e2e
+  protocol: nvme-tcp
+  initiator: nqn.2026-11.io.kouja:kind-node
+  csi.storage.k8s.io/fstype: ext4
+  forceReattach: "false"
+  nodeFailurePolicy: wait
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kouja-csi-controller
+  namespace: kouja-csi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kouja-csi-controller
+  template:
+    metadata:
+      labels:
+        app: kouja-csi-controller
+    spec:
+      serviceAccountName: kouja-csi-controller
+      containers:
+        - name: csi-provisioner
+          image: registry.k8s.io/sig-storage/csi-provisioner:v5.2.0
+          args:
+            - --csi-address=/csi/csi.sock
+            - --leader-election=false
+            - --default-fstype=ext4
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+        - name: csi-attacher
+          image: registry.k8s.io/sig-storage/csi-attacher:v4.8.0
+          args:
+            - --csi-address=/csi/csi.sock
+            - --leader-election=false
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+        - name: csi-resizer
+          image: registry.k8s.io/sig-storage/csi-resizer:v1.14.0
+          args:
+            - --csi-address=/csi/csi.sock
+            - --leader-election=false
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+        - name: kouja-controller
+          image: kouja/csi-controller:e2e
+          imagePullPolicy: IfNotPresent
+          args:
+            - --endpoint=unix:///csi/csi.sock
+            - --hosts=10.10.0.1:9443
+            - --tls-cert=/etc/kouja/tls/tls.crt
+            - --tls-key=/etc/kouja/tls/tls.key
+            - --tls-ca=/etc/kouja/tls/ca.crt
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: tls
+              mountPath: /etc/kouja/tls
+              readOnly: true
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+        - name: tls
+          secret:
+            secretName: kouja-csi-tls
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kouja-csi-node
+  namespace: kouja-csi
+spec:
+  selector:
+    matchLabels:
+      app: kouja-csi-node
+  template:
+    metadata:
+      labels:
+        app: kouja-csi-node
+    spec:
+      serviceAccountName: kouja-csi-node
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: node-driver-registrar
+          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.12.0
+          args:
+            - --csi-address=/csi/csi.sock
+            - --kubelet-registration-path=/var/lib/kubelet/plugins/kouja.csi.voidstarit.com/csi.sock
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            - name: registration-dir
+              mountPath: /registration
+        - name: kouja-node
+          image: kouja/csi-node:e2e
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: KOUJA_ISCSI_INITIATOR
+              value: iqn.2026-11.io.kouja:kind-node
+          args:
+            - --endpoint=unix:///csi/csi.sock
+            - --agent-endpoint=10.10.0.1:9443
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            - name: node-tls
+              mountPath: /etc/kouja/tls
+              readOnly: true
+            - name: dev
+              mountPath: /dev
+            - name: kubelet
+              mountPath: /var/lib/kubelet
+              mountPropagation: Bidirectional
+            - name: modules
+              mountPath: /lib/modules
+              readOnly: true
+            - name: host-run
+              mountPath: /run
+            - name: iscsi-etc
+              mountPath: /etc/iscsi
+            - name: nvme-etc
+              mountPath: /etc/nvme
+      volumes:
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/kouja.csi.voidstarit.com
+            type: DirectoryOrCreate
+        - name: node-tls
+          secret:
+            secretName: kouja-csi-node-tls
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: DirectoryOrCreate
+        - name: dev
+          hostPath:
+            path: /dev
+            type: Directory
+        - name: kubelet
+          hostPath:
+            path: /var/lib/kubelet
+            type: Directory
+        - name: modules
+          hostPath:
+            path: /lib/modules
+            type: Directory
+        - name: host-run
+          hostPath:
+            path: /run
+            type: Directory
+        - name: iscsi-etc
+          hostPath:
+            path: /etc/iscsi
+            type: DirectoryOrCreate
+        - name: nvme-etc
+          hostPath:
+            path: /etc/nvme
+            type: DirectoryOrCreate

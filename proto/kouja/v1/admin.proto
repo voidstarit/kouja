@@ -1,0 +1,177 @@
+syntax = "proto3";
+
+package kouja.v1;
+
+option go_package = "github.com/voidstarit/kouja/gen/kouja/v1;koujav1";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "kouja/v1/common.proto";
+
+message RegisterVGRequest {
+  string vg_name = 1;
+  string vg_uuid = 2;
+  string request_id = 3;
+}
+
+message RegisterVGResponse {
+  Capacity capacity = 1;
+  string request_id = 2;
+}
+
+message DeregisterVGRequest {
+  string vg_name = 1;
+  string request_id = 2;
+}
+
+message DeregisterVGResponse {
+  string request_id = 1;
+}
+
+message ListVGsRequest {}
+
+message ListVGsResponse {
+  repeated Capacity vgs = 1;
+}
+
+message ImportVolumeRequest {
+  string volume_id = 1;
+  string owner = 2;
+  string vg = 3;
+  string lv_uuid = 4;
+  string lv_name = 5;
+  int64 size_bytes = 6;
+  Protocol protocol = 7;
+  string initiator = 8;
+  string target_name = 9;
+  int32 lun = 10;
+  int32 nsid = 11;
+  bytes credential = 12;
+  bool allow_active_sessions = 13;
+  string request_id = 14;
+}
+
+message ImportVolumeResponse {
+  Volume volume = 1;
+  Export export = 2;
+  string operation_id = 3;
+  string request_id = 4;
+}
+
+message ResolveDriftRequest {
+  string volume_id = 1;
+  ResolveAction action = 2;
+  string reason = 3;
+  string owner = 4;
+  string request_id = 5;
+}
+
+message ResolveDriftResponse {
+  Volume volume = 1;
+  string operation_id = 2;
+  string request_id = 3;
+}
+
+message ListOrphansRequest {}
+
+message ListOrphansResponse {
+  repeated Volume orphans = 1;
+}
+
+message WipeVolumeRequest {
+  string volume_id = 1;
+  bool acknowledge_data_loss = 2;
+  bool force = 3;
+  string request_id = 4;
+  string owner = 5;
+}
+
+message WipeVolumeResponse {
+  string operation_id = 1;
+  string request_id = 2;
+}
+
+message TransferOwnershipRequest {
+  string volume_id = 1;
+  string new_owner = 2;
+  string owner = 3;
+  string request_id = 4;
+}
+
+message TransferOwnershipResponse {
+  Volume volume = 1;
+  string operation_id = 2;
+  string request_id = 3;
+}
+
+message AdminDeleteVolumeRequest {
+  string volume_id = 1;
+  bool acknowledge_data_loss = 2;
+  string owner = 3;
+  string request_id = 4;
+}
+
+message AdminDeleteVolumeResponse {
+  string operation_id = 1;
+  string request_id = 2;
+}
+
+message GrantCredentialRequest {
+  string volume_id = 1;
+  string node_id = 2;
+  string node_caller_id = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  string owner = 5;
+  string request_id = 6;
+}
+
+message GrantCredentialResponse {
+  string request_id = 1;
+}
+
+message RevokeGrantRequest {
+  string volume_id = 1;
+  string node_id = 2;
+  string owner = 3;
+  string request_id = 4;
+}
+
+message RevokeGrantResponse {
+  string request_id = 1;
+}
+
+service AdminService {
+  rpc RegisterVG(RegisterVGRequest) returns (RegisterVGResponse) {
+    option (google.api.http) = { post: "/v1/admin/vgs" body: "*" };
+  }
+  rpc DeregisterVG(DeregisterVGRequest) returns (DeregisterVGResponse) {
+    option (google.api.http) = { delete: "/v1/admin/vgs/{vg_name}" };
+  }
+  rpc ListVGs(ListVGsRequest) returns (ListVGsResponse) {
+    option (google.api.http) = { get: "/v1/admin/vgs" };
+  }
+  rpc ImportVolume(ImportVolumeRequest) returns (ImportVolumeResponse) {
+    option (google.api.http) = { post: "/v1/admin/import" body: "*" };
+  }
+  rpc ResolveDrift(ResolveDriftRequest) returns (ResolveDriftResponse) {
+    option (google.api.http) = { post: "/v1/admin/drift/{volume_id}:resolve" body: "*" };
+  }
+  rpc ListOrphans(ListOrphansRequest) returns (ListOrphansResponse) {
+    option (google.api.http) = { get: "/v1/admin/orphans" };
+  }
+  rpc WipeVolume(WipeVolumeRequest) returns (WipeVolumeResponse) {
+    option (google.api.http) = { post: "/v1/admin/volumes/{volume_id}:wipe" body: "*" };
+  }
+  rpc TransferOwnership(TransferOwnershipRequest) returns (TransferOwnershipResponse) {
+    option (google.api.http) = { post: "/v1/admin/ownership:transfer" body: "*" };
+  }
+  rpc AdminDeleteVolume(AdminDeleteVolumeRequest) returns (AdminDeleteVolumeResponse) {
+    option (google.api.http) = { delete: "/v1/admin/volumes/{volume_id}" };
+  }
+  rpc GrantCredential(GrantCredentialRequest) returns (GrantCredentialResponse) {
+    option (google.api.http) = { post: "/v1/admin/grants" body: "*" };
+  }
+  rpc RevokeGrant(RevokeGrantRequest) returns (RevokeGrantResponse) {
+    option (google.api.http) = { delete: "/v1/admin/grants/{volume_id}/{node_id}" };
+  }
+}

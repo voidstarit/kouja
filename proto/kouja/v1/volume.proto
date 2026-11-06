@@ -1,0 +1,184 @@
+syntax = "proto3";
+
+package kouja.v1;
+
+option go_package = "github.com/voidstarit/kouja/gen/kouja/v1;koujav1";
+
+import "google/api/annotations.proto";
+import "kouja/v1/common.proto";
+
+message CreateVolumeRequest {
+  string volume_id = 1;
+  int64 size_bytes = 2;
+  string vg = 3;
+  optional bool export = 4;
+  Protocol protocol = 5;
+  string initiator = 6;
+  bool wipe = 7;
+  string request_id = 8;
+  optional bool include_credential = 9;
+}
+
+message CreateVolumeResponse {
+  Volume volume = 1;
+  Export export = 2;
+  string operation_id = 3;
+  string request_id = 4;
+}
+
+message ExportVolumeRequest {
+  string volume_id = 1;
+  Protocol protocol = 2;
+  string initiator = 3;
+  string request_id = 4;
+  // Rotate the credential and re-create the target on this export. The
+  // attachment_id makes retries idempotent while a new node/controller
+  // attachment gets a new secret.
+  bool rotate_credential = 5;
+  bool force = 6;
+  string attachment_id = 7;
+}
+
+message ExportVolumeResponse {
+  Volume volume = 1;
+  Export export = 2;
+  string operation_id = 3;
+  string request_id = 4;
+}
+
+message UnexportVolumeRequest {
+  string volume_id = 1;
+  bool force = 2;
+  string request_id = 3;
+}
+
+message UnexportVolumeResponse {
+  Volume volume = 1;
+  Export export = 2;
+  string operation_id = 3;
+  string request_id = 4;
+}
+
+message ResizeVolumeRequest {
+  string volume_id = 1;
+  int64 size_bytes = 2;
+  bool allow_shrink = 3;
+  string request_id = 4;
+}
+
+message ResizeVolumeResponse {
+  Volume volume = 1;
+  Export export = 2;
+  bool rescan_required = 3;
+  bool reconnect_required = 4;
+  string operation_id = 5;
+  string request_id = 6;
+}
+
+message DeleteVolumeRequest {
+  string volume_id = 1;
+  bool force = 2;
+  string request_id = 3;
+}
+
+message DeleteVolumeResponse {
+  string operation_id = 1;
+  string request_id = 2;
+}
+
+message GetVolumeRequest {
+  string volume_id = 1;
+}
+
+message GetVolumeResponse {
+  Volume desired = 1;
+  Observation observed = 2;
+  Export export = 3;
+  repeated DriftReason drift_reasons = 4;
+  string operation_id = 5;
+}
+
+message ListVolumesRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListVolumesResponse {
+  repeated Volume volumes = 1;
+  string next_page_token = 2;
+}
+
+message GetCredentialRequest {
+  string volume_id = 1;
+  string owner = 2;
+}
+
+message GetCredentialResponse {
+  Protocol protocol = 1;
+  string credential = 2;
+  string operation_id = 3;
+}
+
+message RotateCredentialRequest {
+  string volume_id = 1;
+  string request_id = 2;
+}
+
+message RotateCredentialResponse {
+  string credential = 1;
+  string operation_id = 2;
+  string request_id = 3;
+}
+
+message GetCapacityRequest {}
+
+message GetCapacityResponse {
+  repeated Capacity vgs = 1;
+}
+
+message GetInfoRequest {}
+
+message GetInfoResponse {
+  string host_uuid = 1;
+  string agent_version = 2;
+  string api_version = 3;
+  repeated Protocol protocols = 4;
+  repeated string auth_modes = 5;
+  bool ready = 6;
+}
+
+service VolumeService {
+  rpc CreateVolume(CreateVolumeRequest) returns (CreateVolumeResponse) {
+    option (google.api.http) = { post: "/v1/volumes" body: "*" };
+  }
+  rpc ExportVolume(ExportVolumeRequest) returns (ExportVolumeResponse) {
+    option (google.api.http) = { post: "/v1/volumes/{volume_id}:export" body: "*" };
+  }
+  rpc UnexportVolume(UnexportVolumeRequest) returns (UnexportVolumeResponse) {
+    option (google.api.http) = { post: "/v1/volumes/{volume_id}:unexport" body: "*" };
+  }
+  rpc ResizeVolume(ResizeVolumeRequest) returns (ResizeVolumeResponse) {
+    option (google.api.http) = { post: "/v1/volumes/{volume_id}:resize" body: "*" };
+  }
+  rpc DeleteVolume(DeleteVolumeRequest) returns (DeleteVolumeResponse) {
+    option (google.api.http) = { delete: "/v1/volumes/{volume_id}" };
+  }
+  rpc GetVolume(GetVolumeRequest) returns (GetVolumeResponse) {
+    option (google.api.http) = { get: "/v1/volumes/{volume_id}" };
+  }
+  rpc ListVolumes(ListVolumesRequest) returns (ListVolumesResponse) {
+    option (google.api.http) = { get: "/v1/volumes" };
+  }
+  rpc GetCredential(GetCredentialRequest) returns (GetCredentialResponse) {
+    option (google.api.http) = { get: "/v1/volumes/{volume_id}/credential" };
+  }
+  rpc RotateCredential(RotateCredentialRequest) returns (RotateCredentialResponse) {
+    option (google.api.http) = { post: "/v1/volumes/{volume_id}:rotate-credential" body: "*" };
+  }
+  rpc GetCapacity(GetCapacityRequest) returns (GetCapacityResponse) {
+    option (google.api.http) = { get: "/v1/capacity" };
+  }
+  rpc GetInfo(GetInfoRequest) returns (GetInfoResponse) {
+    option (google.api.http) = { get: "/v1/info" };
+  }
+}

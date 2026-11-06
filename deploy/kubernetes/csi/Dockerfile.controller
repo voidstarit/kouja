@@ -1,0 +1,8 @@
+FROM debian:13-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY kouja-csi-controller /usr/local/bin/kouja-csi-controller
+ENTRYPOINT ["/usr/local/bin/kouja-csi-controller"]

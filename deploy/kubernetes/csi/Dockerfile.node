@@ -1,0 +1,10 @@
+FROM debian:13-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates open-iscsi nvme-cli e2fsprogs util-linux \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY kouja-csi-node /usr/local/bin/kouja-csi-node
+COPY entrypoint-node.sh /entrypoint-node.sh
+RUN chmod 0755 /entrypoint-node.sh
+ENTRYPOINT ["/entrypoint-node.sh"]

@@ -1,0 +1,15 @@
+[Unit]
+Description=kouja per-host block storage agent
+After=network-online.target tlshd.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+KeyringMode=shared
+ExecStart=/usr/local/bin/kouja-agent --config /etc/kouja/config.yaml
+Restart=on-failure
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

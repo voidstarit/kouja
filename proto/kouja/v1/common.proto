@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+package kouja.v1;
+
+option go_package = "github.com/voidstarit/kouja/gen/kouja/v1;koujav1";
+
+import "google/protobuf/timestamp.proto";
+
+enum Protocol {
+  PROTOCOL_UNSPECIFIED = 0;
+  PROTOCOL_ISCSI = 1;
+  PROTOCOL_NVME_TCP = 2;
+}
+
+enum VolumeState {
+  VOLUME_STATE_UNSPECIFIED = 0;
+  VOLUME_STATE_CREATING = 1;
+  VOLUME_STATE_AVAILABLE = 2;
+  VOLUME_STATE_EXPORTING = 3;
+  VOLUME_STATE_EXPORTED = 4;
+  VOLUME_STATE_RESIZING = 5;
+  VOLUME_STATE_DELETING = 6;
+  VOLUME_STATE_DELETED = 7;
+  VOLUME_STATE_FAILED = 8;
+  VOLUME_STATE_DRIFT = 9;
+}
+
+enum ExportState {
+  EXPORT_STATE_UNSPECIFIED = 0;
+  EXPORT_STATE_EXPORTING = 1;
+  EXPORT_STATE_EXPORTED = 2;
+  EXPORT_STATE_UNEXPORTING = 3;
+  EXPORT_STATE_UNEXPORTED = 4;
+  EXPORT_STATE_FAILED = 5;
+  EXPORT_STATE_DRIFT = 6;
+}
+
+enum SessionState {
+  SESSION_STATE_UNSPECIFIED = 0;
+  SESSION_STATE_NONE = 1;
+  SESSION_STATE_ACTIVE = 2;
+  SESSION_STATE_UNKNOWN = 3;
+}
+
+enum DriftReason {
+  DRIFT_REASON_UNSPECIFIED = 0;
+  DRIFT_REASON_LV_ABSENT = 1;
+  DRIFT_REASON_SIZE_MISMATCH = 2;
+  DRIFT_REASON_TARGET_ABSENT = 3;
+  DRIFT_REASON_NAMESPACE_ABSENT = 4;
+  DRIFT_REASON_ACL_ABSENT = 5;
+  DRIFT_REASON_INITIATOR_MISMATCH = 6;
+  DRIFT_REASON_UNATTRIBUTED_SESSION = 7;
+}
+
+enum ResolveAction {
+  RESOLVE_ACTION_UNSPECIFIED = 0;
+  RESOLVE_ACTION_MARK_FAILED = 1;
+  RESOLVE_ACTION_MARK_AVAILABLE = 2;
+  RESOLVE_ACTION_MARK_EXPORTED = 3;
+  RESOLVE_ACTION_MARK_DELETED = 4;
+  RESOLVE_ACTION_RETRY = 5;
+  RESOLVE_ACTION_RECREATE_EXPORT = 6;
+}
+
+message Volume {
+  string owner = 1;
+  string volume_id = 2;
+  string resource_uuid = 3;
+  string lv_name = 4;
+  string vg_name = 5;
+  int64 requested_size_bytes = 6;
+  int64 actual_size_bytes = 7;
+  VolumeState state = 8;
+  repeated DriftReason drift_reasons = 9;
+  string lv_uuid = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  map<string, string> legacy_identity = 13;
+}
+
+message Export {
+  Protocol protocol = 1;
+  string initiator = 2;
+  string target_name = 3;
+  int32 lun = 4;
+  int32 nsid = 5;
+  string portal = 6;
+  ExportState state = 7;
+  SessionState session_state = 8;
+  string credential = 9; // owner-only; omitted from list responses
+}
+
+message Observation {
+  bool lv_present = 1;
+  int64 observed_size_bytes = 2;
+  string device_path = 3;
+  bool target_present = 4;
+  bool namespace_present = 5;
+  bool acl_present = 6;
+  int32 active_sessions = 7;
+  SessionState session_state = 8;
+  string observed_initiator = 9;
+  google.protobuf.Timestamp observed_at = 10;
+  string source = 11;
+}
+
+message Capacity {
+  string vg_name = 1;
+  string vg_uuid = 2;
+  string vg_state = 3;
+  int64 total_bytes = 4;
+  int64 free_bytes = 5;
+  int64 allocatable_bytes = 6;
+  int64 extent_size_bytes = 7;
+  int64 max_volume_bytes = 8;
+  google.protobuf.Timestamp observed_at = 9;
+}
