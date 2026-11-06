@@ -13,7 +13,7 @@ import (
 	"github.com/voidstarit/kouja/internal/target"
 )
 
-func TestISCSIAdapterForceUnexportActiveSession(t *testing.T) {
+func bddTestISCSIAdapterForceUnexportActiveSession(t testing.TB) {
 	if os.Geteuid() != 0 {
 		t.Skip("integration test requires root")
 	}

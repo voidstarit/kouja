@@ -16,14 +16,14 @@ import (
 	"github.com/voidstarit/kouja/internal/lvm"
 )
 
-func requireCommand(t *testing.T, name string) {
+func requireCommand(t testing.TB, name string) {
 	t.Helper()
 	if _, err := exec.LookPath(name); err != nil {
 		t.Skipf("%s is not installed", name)
 	}
 }
 
-func run(t *testing.T, name string, args ...string) string {
+func run(t testing.TB, name string, args ...string) string {
 	t.Helper()
 	command := exec.Command(name, args...)
 	output, err := command.CombinedOutput()
@@ -33,7 +33,7 @@ func run(t *testing.T, name string, args ...string) string {
 	return strings.TrimSpace(string(output))
 }
 
-func TestCommandBackendLifecycle(t *testing.T) {
+func bddTestCommandBackendLifecycle(t testing.TB) {
 	if os.Geteuid() != 0 {
 		t.Skip("integration test requires root")
 	}

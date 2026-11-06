@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func TestAdmissionConcurrencyAndPerCaller(t *testing.T) {
+func bddTestAdmissionConcurrencyAndPerCaller(t testing.TB) {
 	admission := NewAdmission(2, 1, 10)
 	releaseOne, err := admission.AcquireOperation(context.Background(), "caller-a")
 	if err != nil {
@@ -36,7 +36,7 @@ func TestAdmissionConcurrencyAndPerCaller(t *testing.T) {
 	release()
 }
 
-func TestAdmissionCapacityRate(t *testing.T) {
+func bddTestAdmissionCapacityRate(t testing.TB) {
 	admission := NewAdmission(2, 2, 1)
 	base := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
 	admission.now = func() time.Time { return base }

@@ -58,7 +58,7 @@ func newTestBackend(runner Runner, options ...Option) *commandBackend {
 	return New(options...).(*commandBackend)
 }
 
-func TestCreateBuildsCommandAndObservesAllocatedSize(t *testing.T) {
+func bddTestCreateBuildsCommandAndObservesAllocatedSize(t testing.TB) {
 	runner := &fakeRunner{}
 	runner.handler = func(name string, args []string) ([]byte, []byte, error) {
 		switch name {
@@ -100,7 +100,7 @@ func TestCreateBuildsCommandAndObservesAllocatedSize(t *testing.T) {
 	}
 }
 
-func TestCreateMapsResourceExhausted(t *testing.T) {
+func bddTestCreateMapsResourceExhausted(t testing.TB) {
 	runner := &fakeRunner{handler: func(name string, args []string) ([]byte, []byte, error) {
 		if name == "lvcreate" {
 			return nil, []byte("insufficient free space: 0 extents needed"), errors.New("exit status 5")
@@ -120,7 +120,7 @@ func TestCreateMapsResourceExhausted(t *testing.T) {
 	}
 }
 
-func TestObserveParsesTagsAndNotFound(t *testing.T) {
+func bddTestObserveParsesTagsAndNotFound(t testing.TB) {
 	runner := &fakeRunner{handler: func(name string, args []string) ([]byte, []byte, error) {
 		if len(args) > 0 && args[len(args)-1] == "vg1/missing" {
 			return []byte(`{"report":[{"lv":[]}]}`), nil, nil
@@ -140,7 +140,7 @@ func TestObserveParsesTagsAndNotFound(t *testing.T) {
 	}
 }
 
-func TestCapacityAppliesHeadroom(t *testing.T) {
+func bddTestCapacityAppliesHeadroom(t testing.TB) {
 	runner := &fakeRunner{handler: func(name string, args []string) ([]byte, []byte, error) {
 		return jsonVG("vg1", "wz--n-", "1000", "800", "4", "0"), nil, nil
 	}}
@@ -176,7 +176,7 @@ func TestCapacityAppliesHeadroom(t *testing.T) {
 	}
 }
 
-func TestEligibilityRejectsThinClusteredMissingAndRootBacked(t *testing.T) {
+func bddTestEligibilityRejectsThinClusteredMissingAndRootBacked(t testing.TB) {
 	normalVG := jsonVG("vg1", "wz--n-", "1000", "800", "4", "0")
 	normalLV := jsonLV("lv1", "vg1", "100", "", "/dev/mapper/vg1-lv1")
 	tests := []struct {
@@ -194,7 +194,7 @@ func TestEligibilityRejectsThinClusteredMissingAndRootBacked(t *testing.T) {
 		{name: "root-backed", vg: normalVG, lv: []byte(`{"report":[{"lv":[{"lv_name":"root","vg_name":"vg1","lv_attr":"-wi-ao----","lv_tags":"","lv_dm_path":"/dev/mapper/vg1-root"}]}]}`), findmnt: "/dev/mapper/vg1-root\n", criticalPaths: []string{"/"}, want: ErrIneligible},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		bddSubtest(t, test.name, func(t testing.TB) {
 			runner := &fakeRunner{handler: func(name string, args []string) ([]byte, []byte, error) {
 				switch name {
 				case "vgs":
@@ -221,7 +221,7 @@ func TestEligibilityRejectsThinClusteredMissingAndRootBacked(t *testing.T) {
 	}
 }
 
-func TestSetOwnerTagReplacesExistingOwnerTag(t *testing.T) {
+func bddTestSetOwnerTagReplacesExistingOwnerTag(t testing.TB) {
 	runner := &fakeRunner{}
 	runner.handler = func(name string, args []string) ([]byte, []byte, error) {
 		if name == "lvs" {
@@ -243,7 +243,7 @@ func TestSetOwnerTagReplacesExistingOwnerTag(t *testing.T) {
 	}
 }
 
-func TestListManagedAndCandidates(t *testing.T) {
+func bddTestListManagedAndCandidates(t testing.TB) {
 	runner := &fakeRunner{handler: func(name string, args []string) ([]byte, []byte, error) {
 		return []byte(`{"report":[{"lv":[
 			{"lv_name":"managed","vg_name":"vg1","lv_size":"1","lv_tags":"kouja.managed=true","lv_dm_path":"/dev/mapper/vg1-managed"},
@@ -267,7 +267,7 @@ func TestListManagedAndCandidates(t *testing.T) {
 	}
 }
 
-func TestResizeActivateRemoveCommands(t *testing.T) {
+func bddTestResizeActivateRemoveCommands(t testing.TB) {
 	runner := &fakeRunner{handler: func(name string, args []string) ([]byte, []byte, error) {
 		if name == "lvs" {
 			return jsonLV("lv1", "vg1", "2097152", "", "/dev/mapper/vg1-lv1"), nil, nil
@@ -307,7 +307,7 @@ func TestResizeActivateRemoveCommands(t *testing.T) {
 	}
 }
 
-func TestValidation(t *testing.T) {
+func bddTestValidation(t testing.TB) {
 	runner := &fakeRunner{}
 	backend := newTestBackend(runner)
 	if _, err := backend.Create(context.Background(), "../vg", "lv1", 1, nil); !errors.Is(err, ErrInvalid) {
@@ -327,7 +327,7 @@ func TestValidation(t *testing.T) {
 	}
 }
 
-func TestOptionsCommandErrorAndSettle(t *testing.T) {
+func bddTestOptionsCommandErrorAndSettle(t testing.TB) {
 	commandError := &CommandError{Name: "lvs", Args: []string{"x"}, ExitCode: 5, Stderr: "bad", Err: errors.New("exit")}
 	if commandError.Error() == "" || !errors.Is(commandError, commandError.Err) {
 		t.Fatal("command error did not expose its cause")
@@ -352,7 +352,7 @@ func TestOptionsCommandErrorAndSettle(t *testing.T) {
 	}
 }
 
-func TestJSONAndProbeEdgeCases(t *testing.T) {
+func bddTestJSONAndProbeEdgeCases(t testing.TB) {
 	var value flexString
 	if err := value.UnmarshalJSON(nil); err != nil || value != "" {
 		t.Fatalf("null flex string = %q, %v", value, err)

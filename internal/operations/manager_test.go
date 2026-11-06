@@ -254,7 +254,7 @@ func (manager *fakeCredentials) Install(context.Context, target.ExportSpec, cred
 
 func (manager *fakeCredentials) Revoke(context.Context, target.ExportSpec) error { return nil }
 
-func newTestManager(t *testing.T) (*Manager, *fakeLVM, *fakeExporter, *fakeCredentials, *state.Store) {
+func newTestManager(t testing.TB) (*Manager, *fakeLVM, *fakeExporter, *fakeCredentials, *state.Store) {
 	t.Helper()
 	store, err := state.Open(context.Background(), t.TempDir()+"/state.db")
 	if err != nil {
@@ -283,7 +283,7 @@ func newTestManager(t *testing.T) (*Manager, *fakeLVM, *fakeExporter, *fakeCrede
 	return manager, lvmBackend, exporter, credentials, store
 }
 
-func createRequest(t *testing.T, volumeID, resourceUUID string, size int64, export bool) Request {
+func createRequest(t testing.TB, volumeID, resourceUUID string, size int64, export bool) Request {
 	t.Helper()
 	intent := CreateIntent{
 		ResourceUUID: resourceUUID,
@@ -304,7 +304,7 @@ func createRequest(t *testing.T, volumeID, resourceUUID string, size int64, expo
 	return Request{Owner: "spiffe://kouja/caller/test", VolumeID: volumeID, Action: ActionCreate, Intent: raw}
 }
 
-func getVolume(t *testing.T, store *state.Store, owner, volumeID string) (state.Volume, error) {
+func getVolume(t testing.TB, store *state.Store, owner, volumeID string) (state.Volume, error) {
 	t.Helper()
 	var volume state.Volume
 	err := store.Transact(context.Background(), func(tx state.Tx) error {
@@ -315,7 +315,7 @@ func getVolume(t *testing.T, store *state.Store, owner, volumeID string) (state.
 	return volume, err
 }
 
-func getOperation(t *testing.T, store *state.Store, request Request) (state.Operation, error) {
+func getOperation(t testing.TB, store *state.Store, request Request) (state.Operation, error) {
 	t.Helper()
 	hash := mustHash(request)
 	var operation state.Operation
@@ -327,7 +327,7 @@ func getOperation(t *testing.T, store *state.Store, request Request) (state.Oper
 	return operation, err
 }
 
-func TestCreateUnexported(t *testing.T) {
+func bddTestCreateUnexported(t testing.TB) {
 	manager, lvmBackend, _, _, store := newTestManager(t)
 	request := createRequest(t, "vol1", "resource-1", 64<<20, false)
 	result, err := manager.Run(context.Background(), request)
@@ -356,7 +356,7 @@ func TestCreateUnexported(t *testing.T) {
 	}
 }
 
-func TestCreateExportAndIdempotentReplay(t *testing.T) {
+func bddTestCreateExportAndIdempotentReplay(t testing.TB) {
 	manager, lvmBackend, exporter, _, store := newTestManager(t)
 	request := createRequest(t, "vol1", "resource-1", 64<<20, true)
 	result, err := manager.Run(context.Background(), request)
@@ -386,7 +386,7 @@ func TestCreateExportAndIdempotentReplay(t *testing.T) {
 	}
 }
 
-func TestCreateDifferentParametersRejected(t *testing.T) {
+func bddTestCreateDifferentParametersRejected(t testing.TB) {
 	manager, _, _, _, store := newTestManager(t)
 	request := createRequest(t, "vol1", "resource-1", 64<<20, false)
 	if _, err := manager.Run(context.Background(), request); err != nil {
@@ -409,7 +409,7 @@ func TestCreateDifferentParametersRejected(t *testing.T) {
 	}
 }
 
-func TestUnexportRequiresForceAndSupersedesCredential(t *testing.T) {
+func bddTestUnexportRequiresForceAndSupersedesCredential(t testing.TB) {
 	manager, _, exporter, _, store := newTestManager(t)
 	create := createRequest(t, "vol1", "resource-1", 64<<20, true)
 	if _, err := manager.Run(context.Background(), create); err != nil {
@@ -446,7 +446,7 @@ func TestUnexportRequiresForceAndSupersedesCredential(t *testing.T) {
 	}
 }
 
-func TestDeleteForceAndSessionGuard(t *testing.T) {
+func bddTestDeleteForceAndSessionGuard(t testing.TB) {
 	manager, lvmBackend, exporter, _, store := newTestManager(t)
 	create := createRequest(t, "vol1", "resource-1", 64<<20, true)
 	if _, err := manager.Run(context.Background(), create); err != nil {
@@ -486,7 +486,7 @@ func TestDeleteForceAndSessionGuard(t *testing.T) {
 	}
 }
 
-func TestResizeExtendsVolumeAndRefreshesExport(t *testing.T) {
+func bddTestResizeExtendsVolumeAndRefreshesExport(t testing.TB) {
 	manager, lvmBackend, exporter, _, store := newTestManager(t)
 	create := createRequest(t, "vol1", "resource-1", 64<<20, true)
 	if _, err := manager.Run(context.Background(), create); err != nil {
@@ -523,7 +523,7 @@ func TestResizeExtendsVolumeAndRefreshesExport(t *testing.T) {
 	}
 }
 
-func mustJSON(t *testing.T, value any) []byte {
+func mustJSON(t testing.TB, value any) []byte {
 	t.Helper()
 	raw, err := json.Marshal(value)
 	if err != nil {
@@ -532,7 +532,7 @@ func mustJSON(t *testing.T, value any) []byte {
 	return raw
 }
 
-func TestExecutionFailureIsJournaledAndNotReplayed(t *testing.T) {
+func bddTestExecutionFailureIsJournaledAndNotReplayed(t testing.TB) {
 	manager, lvmBackend, _, _, store := newTestManager(t)
 	lvmBackend.createErr = errors.New("storage offline")
 	request := createRequest(t, "vol1", "resource-1", 64<<20, false)
@@ -563,7 +563,7 @@ func TestExecutionFailureIsJournaledAndNotReplayed(t *testing.T) {
 	}
 }
 
-func TestTombstoneRetiresStaleDeleteOperation(t *testing.T) {
+func bddTestTombstoneRetiresStaleDeleteOperation(t testing.TB) {
 	manager, _, _, _, store := newTestManager(t)
 	first := createRequest(t, "vol1", "resource-1", 64<<20, false)
 	if _, err := manager.Run(context.Background(), first); err != nil {
@@ -586,7 +586,7 @@ func TestTombstoneRetiresStaleDeleteOperation(t *testing.T) {
 	}
 }
 
-func TestRetryRearmsFailedOperation(t *testing.T) {
+func bddTestRetryRearmsFailedOperation(t testing.TB) {
 	manager, lvmBackend, _, _, store := newTestManager(t)
 	lvmBackend.createErr = errors.New("storage offline")
 	request := createRequest(t, "vol1", "resource-1", 64<<20, false)
@@ -614,7 +614,7 @@ func TestRetryRearmsFailedOperation(t *testing.T) {
 	}
 }
 
-func TestExportDifferentInitiatorRejected(t *testing.T) {
+func bddTestExportDifferentInitiatorRejected(t testing.TB) {
 	manager, _, _, _, _ := newTestManager(t)
 	create := createRequest(t, "vol1", "resource-1", 64<<20, false)
 	if _, err := manager.Run(context.Background(), create); err != nil {
@@ -634,7 +634,7 @@ func TestExportDifferentInitiatorRejected(t *testing.T) {
 	}
 }
 
-func exportRequest(t *testing.T, owner, volumeID string, intent ExportIntent) Request {
+func exportRequest(t testing.TB, owner, volumeID string, intent ExportIntent) Request {
 	t.Helper()
 	raw, err := json.Marshal(intent)
 	if err != nil {
@@ -643,7 +643,7 @@ func exportRequest(t *testing.T, owner, volumeID string, intent ExportIntent) Re
 	return Request{Owner: owner, VolumeID: volumeID, Action: ActionExport, Intent: raw}
 }
 
-func activeCredential(t *testing.T, store *state.Store, owner, volumeID string) state.Credential {
+func activeCredential(t testing.TB, store *state.Store, owner, volumeID string) state.Credential {
 	t.Helper()
 	var value state.Credential
 	if err := store.Transact(context.Background(), func(tx state.Tx) error {
@@ -656,7 +656,7 @@ func activeCredential(t *testing.T, store *state.Store, owner, volumeID string) 
 	return value
 }
 
-func TestExportRotationAfterUnexportUsesNewCredential(t *testing.T) {
+func bddTestExportRotationAfterUnexportUsesNewCredential(t testing.TB) {
 	manager, _, exporter, _, store := newTestManager(t)
 	create := createRequest(t, "vol1", "resource-1", 64<<20, false)
 	if _, err := manager.Run(context.Background(), create); err != nil {
@@ -688,7 +688,7 @@ func TestExportRotationAfterUnexportUsesNewCredential(t *testing.T) {
 	}
 }
 
-func TestExportRotationDifferentInitiator(t *testing.T) {
+func bddTestExportRotationDifferentInitiator(t testing.TB) {
 	manager, _, exporter, _, store := newTestManager(t)
 	create := createRequest(t, "vol1", "resource-1", 64<<20, false)
 	if _, err := manager.Run(context.Background(), create); err != nil {
@@ -717,7 +717,7 @@ func TestExportRotationDifferentInitiator(t *testing.T) {
 	}
 }
 
-func TestExportRotationRequiresForceForActiveSession(t *testing.T) {
+func bddTestExportRotationRequiresForceForActiveSession(t testing.TB) {
 	manager, _, exporter, _, _ := newTestManager(t)
 	create := createRequest(t, "vol1", "resource-1", 64<<20, false)
 	if _, err := manager.Run(context.Background(), create); err != nil {
@@ -742,7 +742,7 @@ func TestExportRotationRequiresForceForActiveSession(t *testing.T) {
 	}
 }
 
-func TestExportRotationIsIdempotentForSameAttachment(t *testing.T) {
+func bddTestExportRotationIsIdempotentForSameAttachment(t testing.TB) {
 	manager, _, exporter, _, store := newTestManager(t)
 	create := createRequest(t, "vol1", "resource-1", 64<<20, false)
 	if _, err := manager.Run(context.Background(), create); err != nil {
@@ -769,7 +769,7 @@ func TestExportRotationIsIdempotentForSameAttachment(t *testing.T) {
 	}
 }
 
-func TestIntentParsersAndInternalHelpers(t *testing.T) {
+func bddTestIntentParsersAndInternalHelpers(t testing.TB) {
 	if _, err := parseCreateIntent([]byte(`{}`)); !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("invalid create = %v", err)
 	}
@@ -827,7 +827,7 @@ func TestIntentParsersAndInternalHelpers(t *testing.T) {
 	_ = store
 }
 
-func TestOperationManagerErrorPaths(t *testing.T) {
+func bddTestOperationManagerErrorPaths(t testing.TB) {
 	manager, _, _, _, _ := newTestManager(t)
 	ctx := context.Background()
 	if _, err := manager.Run(ctx, Request{}); !errors.Is(err, ErrInvalidRequest) {
@@ -862,7 +862,7 @@ func TestOperationManagerErrorPaths(t *testing.T) {
 	}
 }
 
-func TestResizeAndDeleteGuards(t *testing.T) {
+func bddTestResizeAndDeleteGuards(t testing.TB) {
 	manager, lvmBackend, _, _, store := newTestManager(t)
 	create := createRequest(t, "vol1", "resource-1", 64<<20, false)
 	if _, err := manager.Run(context.Background(), create); err != nil {
@@ -905,7 +905,7 @@ func TestResizeAndDeleteGuards(t *testing.T) {
 	}
 }
 
-func TestOperationErrorAndDefaults(t *testing.T) {
+func bddTestOperationErrorAndDefaults(t testing.TB) {
 	plain := &OperationError{Code: "CODE", Err: errors.New("cause")}
 	if plain.Error() == "" || !errors.Is(plain, plain.Err) {
 		t.Fatal("plain operation error did not expose its cause")
@@ -920,7 +920,7 @@ func TestOperationErrorAndDefaults(t *testing.T) {
 	}
 }
 
-func TestCreateCapacityGuard(t *testing.T) {
+func bddTestCreateCapacityGuard(t testing.TB) {
 	manager, lvmBackend, _, _, _ := newTestManager(t)
 	lvmBackend.capacity.AllocatableBytes = 0
 	request := createRequest(t, "vol-capacity", "resource-capacity", 1<<20, false)
@@ -929,7 +929,7 @@ func TestCreateCapacityGuard(t *testing.T) {
 	}
 }
 
-func TestResizeExportFailure(t *testing.T) {
+func bddTestResizeExportFailure(t testing.TB) {
 	manager, _, exporter, _, _ := newTestManager(t)
 	create := createRequest(t, "vol-resize", "resource-resize", 64<<20, true)
 	if _, err := manager.Run(context.Background(), create); err != nil {

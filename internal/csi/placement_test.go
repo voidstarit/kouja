@@ -11,7 +11,7 @@ import (
 	"k8s.io/client-go/dynamic/fake"
 )
 
-func TestKubernetesPlacementLifecycle(t *testing.T) {
+func bddTestKubernetesPlacementLifecycle(t testing.TB) {
 	client := fake.NewSimpleDynamicClientWithCustomListKinds(
 		runtime.NewScheme(),
 		map[schema.GroupVersionResource]string{placementResource: "KoujaVolumePlacementList"},

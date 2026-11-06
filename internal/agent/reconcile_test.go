@@ -45,7 +45,7 @@ func (exporter *reconcileTarget) Restore(context.Context, target.ExportSpec, tar
 }
 func (exporter *reconcileTarget) Delete(context.Context, target.ExportSpec, bool) error { return nil }
 
-func TestReconcileWritesObservationsAndDrift(t *testing.T) {
+func bddTestReconcileWritesObservationsAndDrift(t testing.TB) {
 	store := newAgentStore(t)
 	owner := "spiffe://kouja/caller/one"
 	addAgentVolume(t, store, owner, "vol1", "resource-1", "exported")

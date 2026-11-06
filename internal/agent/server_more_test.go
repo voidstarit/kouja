@@ -18,7 +18,7 @@ import (
 	"github.com/voidstarit/kouja/internal/observability"
 )
 
-func agentTLSFiles(t *testing.T) (string, string, string) {
+func agentTLSFiles(t testing.TB) (string, string, string) {
 	t.Helper()
 	dir := t.TempDir()
 	caKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -60,7 +60,7 @@ func agentTLSFiles(t *testing.T) (string, string, string) {
 	return certPath, keyPath, caPath
 }
 
-func TestNewServerLifecycleAndErrors(t *testing.T) {
+func bddTestNewServerLifecycleAndErrors(t testing.TB) {
 	cert, key, ca := agentTLSFiles(t)
 	cfg := config.Default()
 	cfg.Listen.Address = "127.0.0.1:0"
@@ -101,7 +101,7 @@ func TestNewServerLifecycleAndErrors(t *testing.T) {
 	}
 }
 
-func TestDependencyChecksAndReconcileLoop(t *testing.T) {
+func bddTestDependencyChecksAndReconcileLoop(t testing.TB) {
 	previous := os.Getenv("PATH")
 	t.Setenv("PATH", filepath.Join(t.TempDir(), "empty"))
 	cfg := config.Default()

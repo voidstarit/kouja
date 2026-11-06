@@ -18,7 +18,7 @@ import (
 // StorageClass named by KOUJA_E2E_STORAGECLASS are already installed in the
 // current kubectl context. It exercises dynamic provisioning, attach, login,
 // format, write, read, unmount, and delete.
-func TestCSIIscsiProvisionAndIO(t *testing.T) {
+func bddTestCSIIscsiProvisionAndIO(t testing.TB) {
 	if os.Getenv("KOUJA_E2E") != "1" {
 		t.Skip("set KOUJA_E2E=1 with a kubeconfig and installed kouja CSI driver")
 	}
@@ -92,7 +92,7 @@ func envOrDefault(key, fallback string) string {
 	return fallback
 }
 
-func run(t *testing.T, ctx context.Context, stdin string, args ...string) string {
+func run(t testing.TB, ctx context.Context, stdin string, args ...string) string {
 	t.Helper()
 	var input *bytes.Reader
 	if stdin != "" {
@@ -101,12 +101,12 @@ func run(t *testing.T, ctx context.Context, stdin string, args ...string) string
 	return kubectlReader(t, ctx, input, args...)
 }
 
-func kubectl(t *testing.T, ctx context.Context, stdin *bytes.Reader, args ...string) string {
+func kubectl(t testing.TB, ctx context.Context, stdin *bytes.Reader, args ...string) string {
 	t.Helper()
 	return kubectlReader(t, ctx, stdin, args...)
 }
 
-func kubectlReader(t *testing.T, ctx context.Context, stdin *bytes.Reader, args ...string) string {
+func kubectlReader(t testing.TB, ctx context.Context, stdin *bytes.Reader, args ...string) string {
 	t.Helper()
 	command := exec.CommandContext(ctx, "kubectl", args...) //nolint:gosec // test harness invokes the operator's kubectl
 	if stdin != nil {
@@ -119,7 +119,7 @@ func kubectlReader(t *testing.T, ctx context.Context, stdin *bytes.Reader, args 
 	return string(output)
 }
 
-func waitForPhase(t *testing.T, ctx context.Context, namespace, podName, phase string) {
+func waitForPhase(t testing.TB, ctx context.Context, namespace, podName, phase string) {
 	t.Helper()
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -143,7 +143,7 @@ func waitForPhase(t *testing.T, ctx context.Context, namespace, podName, phase s
 // generation receives a different CHAP secret. The CSI controller must pass
 // the VolumeAttachment UID to the agent; repeated retries of one attachment
 // remain idempotent.
-func TestCSICredentialRotationOnReattach(t *testing.T) {
+func bddTestCSICredentialRotationOnReattach(t testing.TB) {
 	if os.Getenv("KOUJA_E2E") != "1" {
 		t.Skip("set KOUJA_E2E=1 with a kubeconfig and installed kouja CSI driver")
 	}
@@ -246,7 +246,7 @@ type attachmentRef struct {
 	uid        string
 }
 
-func attachmentForPV(t *testing.T, ctx context.Context, pvName string) attachmentRef {
+func attachmentForPV(t testing.TB, ctx context.Context, pvName string) attachmentRef {
 	t.Helper()
 	raw := kubectl(t, ctx, nil, "get", "volumeattachment", "-o", "json")
 	var list volumeAttachmentList

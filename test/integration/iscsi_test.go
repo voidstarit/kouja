@@ -15,7 +15,7 @@ import (
 	"github.com/voidstarit/kouja/internal/target"
 )
 
-func TestISCSIAdapterLifecycle(t *testing.T) {
+func bddTestISCSIAdapterLifecycle(t testing.TB) {
 	if os.Geteuid() != 0 {
 		t.Skip("integration test requires root")
 	}

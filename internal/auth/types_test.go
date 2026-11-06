@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func uri(t *testing.T, value string) *url.URL {
+func uri(t testing.TB, value string) *url.URL {
 	t.Helper()
 	parsed, err := url.Parse(value)
 	if err != nil {
@@ -15,7 +15,7 @@ func uri(t *testing.T, value string) *url.URL {
 	return parsed
 }
 
-func TestParseRolesAndErrors(t *testing.T) {
+func bddTestParseRolesAndErrors(t testing.TB) {
 	for _, test := range []struct {
 		san  string
 		role Role

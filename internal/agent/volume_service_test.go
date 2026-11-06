@@ -86,7 +86,7 @@ func (manager *fakeCredentialManager) Install(context.Context, target.ExportSpec
 }
 func (manager *fakeCredentialManager) Revoke(context.Context, target.ExportSpec) error { return nil }
 
-func newAgentStore(t *testing.T) *state.Store {
+func newAgentStore(t testing.TB) *state.Store {
 	t.Helper()
 	store, err := state.Open(context.Background(), filepath.Join(t.TempDir(), "state.db"))
 	if err != nil {
@@ -96,7 +96,7 @@ func newAgentStore(t *testing.T) *state.Store {
 	return store
 }
 
-func addAgentVolume(t *testing.T, store *state.Store, owner, volumeID, resourceUUID, stateValue string) {
+func addAgentVolume(t testing.TB, store *state.Store, owner, volumeID, resourceUUID, stateValue string) {
 	t.Helper()
 	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
 	err := store.Transact(context.Background(), func(tx state.Tx) error {
@@ -119,7 +119,7 @@ func callerContext(owner string) context.Context {
 	return WithIdentity(context.Background(), auth.Identity{Owner: owner, Role: auth.RoleCaller})
 }
 
-func TestCreateVolumeBuildsCanonicalIntent(t *testing.T) {
+func bddTestCreateVolumeBuildsCanonicalIntent(t testing.TB) {
 	store := newAgentStore(t)
 	runner := &fakeRunner{result: operations.Result{OperationID: "op-1"}}
 	service := NewVolumeService(store, &fakeLVM{}, runner, &fakeCredentialManager{}, ServiceOptions{
@@ -148,7 +148,7 @@ func TestCreateVolumeBuildsCanonicalIntent(t *testing.T) {
 	}
 }
 
-func TestCreateVolumeUnexportedDoesNotRequireProtocol(t *testing.T) {
+func bddTestCreateVolumeUnexportedDoesNotRequireProtocol(t testing.TB) {
 	store := newAgentStore(t)
 	runner := &fakeRunner{}
 	service := NewVolumeService(store, &fakeLVM{}, runner, &fakeCredentialManager{}, ServiceOptions{
@@ -170,7 +170,7 @@ func TestCreateVolumeUnexportedDoesNotRequireProtocol(t *testing.T) {
 	}
 }
 
-func TestGetVolumeOwnerScopingAndMapping(t *testing.T) {
+func bddTestGetVolumeOwnerScopingAndMapping(t testing.TB) {
 	store := newAgentStore(t)
 	owner := "spiffe://kouja/caller/one"
 	addAgentVolume(t, store, owner, "vol1", "resource-1", "available")
@@ -188,7 +188,7 @@ func TestGetVolumeOwnerScopingAndMapping(t *testing.T) {
 	}
 }
 
-func TestListVolumesPaginationAndCapacity(t *testing.T) {
+func bddTestListVolumesPaginationAndCapacity(t testing.TB) {
 	store := newAgentStore(t)
 	owner := "spiffe://kouja/caller/one"
 	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
@@ -229,7 +229,7 @@ func TestListVolumesPaginationAndCapacity(t *testing.T) {
 	}
 }
 
-func TestOperationErrorMapsToStatus(t *testing.T) {
+func bddTestOperationErrorMapsToStatus(t testing.TB) {
 	store := newAgentStore(t)
 	runner := &fakeRunner{err: &operations.OperationError{
 		Code: "SESSION_ACTIVE", Retryable: false, OperationID: "op-1", Err: operations.ErrSessionActive,
@@ -244,7 +244,7 @@ func TestOperationErrorMapsToStatus(t *testing.T) {
 	}
 }
 
-func TestGetCredentialRevealsSecret(t *testing.T) {
+func bddTestGetCredentialRevealsSecret(t testing.TB) {
 	store := newAgentStore(t)
 	owner := "spiffe://kouja/caller/one"
 	addAgentVolume(t, store, owner, "vol1", "resource-1", "available")
@@ -259,7 +259,7 @@ func TestGetCredentialRevealsSecret(t *testing.T) {
 	}
 }
 
-func TestVolumeServiceMutationRPCsAndCredentialValue(t *testing.T) {
+func bddTestVolumeServiceMutationRPCsAndCredentialValue(t testing.TB) {
 	store := newAgentStore(t)
 	owner := "spiffe://kouja/caller/one"
 	addAgentVolume(t, store, owner, "vol1", "resource-1", "exported")
@@ -323,7 +323,7 @@ func TestVolumeServiceMutationRPCsAndCredentialValue(t *testing.T) {
 	}
 }
 
-func TestVolumeServiceHelpersAndStatusErrors(t *testing.T) {
+func bddTestVolumeServiceHelpersAndStatusErrors(t testing.TB) {
 	store := newAgentStore(t)
 	service := NewVolumeService(store, &fakeLVM{}, &fakeRunner{}, &fakeCredentialManager{}, ServiceOptions{})
 	release, err := service.admit(context.Background(), auth.Identity{Owner: "owner"})
@@ -401,7 +401,7 @@ func TestVolumeServiceHelpersAndStatusErrors(t *testing.T) {
 	}
 }
 
-func TestVolumeServiceRPCErrorBranches(t *testing.T) {
+func bddTestVolumeServiceRPCErrorBranches(t testing.TB) {
 	store := newAgentStore(t)
 	owner := "spiffe://kouja/caller/one"
 	addAgentVolume(t, store, owner, "vol1", "resource-1", "available")

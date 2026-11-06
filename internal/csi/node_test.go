@@ -10,7 +10,7 @@ import (
 	csipb "github.com/container-storage-interface/spec/lib/go/csi"
 )
 
-func fakeCommands(t *testing.T) {
+func fakeCommands(t testing.TB) {
 	t.Helper()
 	directory := t.TempDir()
 	scripts := map[string]string{
@@ -46,7 +46,7 @@ exit 0
 	t.Setenv("PATH", directory+":"+os.Getenv("PATH"))
 }
 
-func TestNodeLifecycleAndExpand(t *testing.T) {
+func bddTestNodeLifecycleAndExpand(t testing.TB) {
 	fakeCommands(t)
 	node := NewNode("node-1", "nqn.test", "ext4")
 	target := filepath.Join(t.TempDir(), "target")
@@ -94,7 +94,7 @@ func TestNodeLifecycleAndExpand(t *testing.T) {
 	}
 }
 
-func TestNodeISCSIPublishAndFailures(t *testing.T) {
+func bddTestNodeISCSIPublishAndFailures(t testing.TB) {
 	fakeCommands(t)
 	previous := iscsiInitiatorPath
 	iscsiInitiatorPath = filepath.Join(t.TempDir(), "initiatorname.iscsi")
@@ -131,7 +131,7 @@ func TestNodeISCSIPublishAndFailures(t *testing.T) {
 	}
 }
 
-func TestNodeMiscellaneousPaths(t *testing.T) {
+func bddTestNodeMiscellaneousPaths(t testing.TB) {
 	fakeCommands(t)
 	node := NewNode("node-1", "nqn.test", "ext4")
 	if err := ensureDeviceNode("definitely-missing-kouja-device"); err == nil {
@@ -176,7 +176,7 @@ func TestNodeMiscellaneousPaths(t *testing.T) {
 
 }
 
-func TestNodeCredentialAndHelpers(t *testing.T) {
+func bddTestNodeCredentialAndHelpers(t testing.TB) {
 	fakeCommands(t)
 	node := NewNode("node-1", "nqn.test", "ext4")
 	node.agentEndpoint = "agent-1:9443"
@@ -215,7 +215,7 @@ func TestNodeCredentialAndHelpers(t *testing.T) {
 	}
 }
 
-func TestNodeFilesystemAndWaitEdges(t *testing.T) {
+func bddTestNodeFilesystemAndWaitEdges(t testing.TB) {
 	fakeCommands(t)
 	node := NewNode("node-1", "nqn.test", "ext4")
 	if err := ensureFilesystem(context.Background(), "/dev/null", "xfs"); err != nil {
@@ -241,7 +241,7 @@ func TestNodeFilesystemAndWaitEdges(t *testing.T) {
 	}
 }
 
-func TestNodeSetAgentAndNoop(t *testing.T) {
+func bddTestNodeSetAgentAndNoop(t testing.TB) {
 	node := NewNode("node-1", "nqn.test", "")
 	if node.FsType != "ext4" {
 		t.Fatalf("default fs type = %q", node.FsType)

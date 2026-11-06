@@ -265,7 +265,7 @@ func newTestController() (*Controller, *fakeVolumeClient, *fakeAdminClient, *fak
 	return controller, volume, admin, policy, placement
 }
 
-func TestControllerCreateDeleteAndPlacement(t *testing.T) {
+func bddTestControllerCreateDeleteAndPlacement(t testing.TB) {
 	controller, volume, _, _, placement := newTestController()
 	request := &csipb.CreateVolumeRequest{
 		Name:          "vol-1",
@@ -297,7 +297,7 @@ func TestControllerCreateDeleteAndPlacement(t *testing.T) {
 	}
 }
 
-func TestControllerPublishGrantsAndUnpublishRevokes(t *testing.T) {
+func bddTestControllerPublishGrantsAndUnpublishRevokes(t testing.TB) {
 	controller, volume, admin, policy, _ := newTestController()
 	volume.volumes = []*koujav1.Volume{{
 		Owner: "spiffe://kouja/controller/test", VolumeId: "vol-1", ResourceUuid: "resource-1",
@@ -334,7 +334,7 @@ func TestControllerPublishGrantsAndUnpublishRevokes(t *testing.T) {
 	}
 }
 
-func TestControllerExpandStatusCapabilitiesAndIdentity(t *testing.T) {
+func bddTestControllerExpandStatusCapabilitiesAndIdentity(t testing.TB) {
 	controller, volume, _, _, _ := newTestController()
 	volume.volumes = []*koujav1.Volume{{VolumeId: "vol-1", ResourceUuid: "resource-1", ActualSizeBytes: 2 << 20}}
 	expanded, err := controller.ControllerExpandVolume(context.Background(), &csipb.ControllerExpandVolumeRequest{
@@ -384,7 +384,7 @@ func TestControllerExpandStatusCapabilitiesAndIdentity(t *testing.T) {
 	}
 }
 
-func TestControllerErrorsAndDuplicatePlacement(t *testing.T) {
+func bddTestControllerErrorsAndDuplicatePlacement(t testing.TB) {
 	controller, volume, _, _, placement := newTestController()
 	if _, err := controller.CreateVolume(context.Background(), &csipb.CreateVolumeRequest{}); status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("empty create = %v", err)
@@ -415,7 +415,7 @@ func TestControllerErrorsAndDuplicatePlacement(t *testing.T) {
 	}
 }
 
-func TestControllerErrorPaths(t *testing.T) {
+func bddTestControllerErrorPaths(t testing.TB) {
 	controller, volume, admin, policy, placement := newTestController()
 	ctx := context.Background()
 	validCreate := &csipb.CreateVolumeRequest{

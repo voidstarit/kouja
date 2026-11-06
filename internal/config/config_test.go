@@ -27,7 +27,7 @@ targets:
         port: 3260
 `
 
-func TestParseAppliesDefaultsAndValidates(t *testing.T) {
+func bddTestParseAppliesDefaultsAndValidates(t testing.TB) {
 	cfg, err := Parse([]byte(validConfig))
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
@@ -44,7 +44,7 @@ func TestParseAppliesDefaultsAndValidates(t *testing.T) {
 	}
 }
 
-func TestLoadFromFile(t *testing.T) {
+func bddTestLoadFromFile(t testing.TB) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte(validConfig), 0o600); err != nil {
 		t.Fatal(err)
@@ -64,14 +64,14 @@ func TestLoadFromFile(t *testing.T) {
 	}
 }
 
-func TestUnknownFieldRejected(t *testing.T) {
+func bddTestUnknownFieldRejected(t testing.TB) {
 	_, err := Parse([]byte(validConfig + "\nunknown_field: true\n"))
 	if err == nil {
 		t.Fatal("unknown field was accepted")
 	}
 }
 
-func TestValidationFailures(t *testing.T) {
+func bddTestValidationFailures(t testing.TB) {
 	tests := []struct {
 		name string
 		yaml string
@@ -145,7 +145,7 @@ targets:
 		},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		bddSubtest(t, test.name, func(t testing.TB) {
 			if _, err := Parse([]byte(test.yaml)); err == nil {
 				t.Fatal("invalid configuration was accepted")
 			}
@@ -153,7 +153,7 @@ targets:
 	}
 }
 
-func TestConfigValidationBranches(t *testing.T) {
+func bddTestConfigValidationBranches(t testing.TB) {
 	cfg := Default()
 	cfg.Listen.TLS.MinVersion = "TLS1.2"
 	if err := cfg.Validate(); err == nil {

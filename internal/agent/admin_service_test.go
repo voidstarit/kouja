@@ -21,7 +21,7 @@ func adminContext() context.Context {
 	})
 }
 
-func TestAdminRegisterAndDeregisterVG(t *testing.T) {
+func bddTestAdminRegisterAndDeregisterVG(t testing.TB) {
 	store := newAgentStore(t)
 	backend := &fakeLVM{capacity: lvm.Capacity{
 		VGName: "vg1", VGUUID: "vg-uuid", VGState: "active", TotalBytes: 10,
@@ -50,7 +50,7 @@ func TestAdminRegisterAndDeregisterVG(t *testing.T) {
 	}
 }
 
-func TestAdminGrantsAndRevokesNodeCredential(t *testing.T) {
+func bddTestAdminGrantsAndRevokesNodeCredential(t testing.TB) {
 	store := newAgentStore(t)
 	owner := "spiffe://kouja/controller/one"
 	addAgentVolume(t, store, owner, "vol1", "resource-1", "exported")
@@ -87,7 +87,7 @@ func TestAdminGrantsAndRevokesNodeCredential(t *testing.T) {
 	}
 }
 
-func TestAdminRejectsNonAdminAndDeregisterWithVolume(t *testing.T) {
+func bddTestAdminRejectsNonAdminAndDeregisterWithVolume(t testing.TB) {
 	store := newAgentStore(t)
 	owner := "spiffe://kouja/caller/one"
 	addAgentVolume(t, store, owner, "vol1", "resource-1", "available")
@@ -101,7 +101,7 @@ func TestAdminRejectsNonAdminAndDeregisterWithVolume(t *testing.T) {
 	}
 }
 
-func TestAdminValidationBranches(t *testing.T) {
+func bddTestAdminValidationBranches(t testing.TB) {
 	store := newAgentStore(t)
 	owner := "spiffe://kouja/controller/one"
 	addAgentVolume(t, store, owner, "vol1", "resource-1", "available")

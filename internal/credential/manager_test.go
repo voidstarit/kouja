@@ -13,7 +13,7 @@ import (
 	"github.com/voidstarit/kouja/internal/target"
 )
 
-func openCredentialStore(t *testing.T) *state.Store {
+func openCredentialStore(t testing.TB) *state.Store {
 	t.Helper()
 	store, err := state.Open(context.Background(), filepath.Join(t.TempDir(), "state.db"))
 	if err != nil {
@@ -23,7 +23,7 @@ func openCredentialStore(t *testing.T) *state.Store {
 	return store
 }
 
-func putCredentialVolume(t *testing.T, store *state.Store, owner, volumeID, resourceUUID string) {
+func putCredentialVolume(t testing.TB, store *state.Store, owner, volumeID, resourceUUID string) {
 	t.Helper()
 	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
 	err := store.Transact(context.Background(), func(tx state.Tx) error {
@@ -42,7 +42,7 @@ func putCredentialVolume(t *testing.T, store *state.Store, owner, volumeID, reso
 	}
 }
 
-func TestGenerateRevealAndKeyFile(t *testing.T) {
+func bddTestGenerateRevealAndKeyFile(t testing.TB) {
 	store := openCredentialStore(t)
 	keyPath := filepath.Join(t.TempDir(), "secret.key")
 	manager, err := Open(store, keyPath)
@@ -85,7 +85,7 @@ func TestGenerateRevealAndKeyFile(t *testing.T) {
 	}
 }
 
-func TestGetAuthorizationAndGrants(t *testing.T) {
+func bddTestGetAuthorizationAndGrants(t testing.TB) {
 	store := openCredentialStore(t)
 	owner := "spiffe://kouja/caller/owner"
 	putCredentialVolume(t, store, owner, "volume", "resource-1")
@@ -138,7 +138,7 @@ func TestGetAuthorizationAndGrants(t *testing.T) {
 	}
 }
 
-func TestRotateReplacesActiveCredential(t *testing.T) {
+func bddTestRotateReplacesActiveCredential(t testing.TB) {
 	store := openCredentialStore(t)
 	owner := "spiffe://kouja/caller/owner"
 	putCredentialVolume(t, store, owner, "volume", "resource-1")
@@ -181,7 +181,7 @@ func TestRotateReplacesActiveCredential(t *testing.T) {
 	}
 }
 
-func TestInstallRevokeAndNVMeGeneration(t *testing.T) {
+func bddTestInstallRevokeAndNVMeGeneration(t testing.TB) {
 	store := openCredentialStore(t)
 	owner := "spiffe://kouja/caller/owner"
 	putCredentialVolume(t, store, owner, "volume", "resource-1")
@@ -227,7 +227,7 @@ func targetSpec(owner, volumeID string) target.ExportSpec {
 	}
 }
 
-func TestCredentialErrorPaths(t *testing.T) {
+func bddTestCredentialErrorPaths(t testing.TB) {
 	store := openCredentialStore(t)
 	if _, err := Open(nil, filepath.Join(t.TempDir(), "key")); err == nil {
 		t.Fatal("nil store Open did not fail")
@@ -268,7 +268,7 @@ func TestCredentialErrorPaths(t *testing.T) {
 	}
 }
 
-func TestCredentialFileOpenErrors(t *testing.T) {
+func bddTestCredentialFileOpenErrors(t testing.TB) {
 	store := openCredentialStore(t)
 	directory := t.TempDir()
 	if _, err := Open(store, directory); err == nil {
@@ -283,7 +283,7 @@ func TestCredentialFileOpenErrors(t *testing.T) {
 	}
 }
 
-func TestCredentialKeyDirectoryErrors(t *testing.T) {
+func bddTestCredentialKeyDirectoryErrors(t testing.TB) {
 	store := openCredentialStore(t)
 	blocker := filepath.Join(t.TempDir(), "blocker")
 	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
@@ -294,7 +294,7 @@ func TestCredentialKeyDirectoryErrors(t *testing.T) {
 	}
 }
 
-func TestRotateWithoutCredential(t *testing.T) {
+func bddTestRotateWithoutCredential(t testing.TB) {
 	store := openCredentialStore(t)
 	owner := "spiffe://kouja/caller/owner"
 	putCredentialVolume(t, store, owner, "volume", "resource-1")

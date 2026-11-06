@@ -17,7 +17,7 @@ import (
 	"github.com/voidstarit/kouja/internal/target"
 )
 
-func TestNVMeTLSAdapterLifecycle(t *testing.T) {
+func bddTestNVMeTLSAdapterLifecycle(t testing.TB) {
 	if os.Geteuid() != 0 {
 		t.Skip("integration test requires root")
 	}
