@@ -3,7 +3,7 @@ BUF ?= buf
 CONTROLLER_GEN ?= controller-gen
 COVERAGE_OUT ?= coverage.out
 
-.PHONY: all build test lint proto generate tools integration e2e fault perf upgrade coverage coverage-check csi-sanity phase0
+.PHONY: all build test test-bdd lint proto generate tools integration e2e fault perf upgrade coverage coverage-check csi-sanity phase0
 
 all: build
 
@@ -12,6 +12,9 @@ build:
 
 test:
 	$(GO) test -tags=unit ./...
+
+test-bdd:
+	$(GO) test -v ./test/bdd
 
 lint:
 	$(GO) vet ./...
