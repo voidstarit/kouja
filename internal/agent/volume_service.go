@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -453,6 +454,25 @@ func (service *VolumeService) GetCapacity(ctx context.Context, _ *koujav1.GetCap
 		}
 		response.Vgs = append(response.Vgs, service.capacityProto(capacity))
 	}
+	return response, nil
+}
+
+func (service *VolumeService) ListStorageClasses(ctx context.Context, _ *koujav1.ListStorageClassesRequest) (*koujav1.ListStorageClassesResponse, error) {
+	capacity, err := service.GetCapacity(ctx, &koujav1.GetCapacityRequest{})
+	if err != nil {
+		return nil, err
+	}
+	response := &koujav1.ListStorageClassesResponse{Classes: make([]*koujav1.StorageClass, 0, len(capacity.GetVgs()))}
+	for _, vg := range capacity.GetVgs() {
+		response.Classes = append(response.Classes, &koujav1.StorageClass{
+			Name: vg.GetStorageClass(), VgName: vg.GetVgName(), VgUuid: vg.GetVgUuid(), VgState: vg.GetVgState(),
+			TotalBytes: vg.GetTotalBytes(), FreeBytes: vg.GetFreeBytes(), AllocatableBytes: vg.GetAllocatableBytes(),
+			ExtentSizeBytes: vg.GetExtentSizeBytes(), MaxVolumeBytes: vg.GetMaxVolumeBytes(), ObservedAt: vg.GetObservedAt(),
+		})
+	}
+	sort.Slice(response.Classes, func(i, j int) bool {
+		return response.Classes[i].GetName() < response.Classes[j].GetName()
+	})
 	return response, nil
 }
 

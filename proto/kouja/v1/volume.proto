@@ -5,6 +5,7 @@ package kouja.v1;
 option go_package = "github.com/voidstarit/kouja/gen/kouja/v1;koujav1";
 
 import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
 import "kouja/v1/common.proto";
 
 message CreateVolumeRequest {
@@ -139,6 +140,26 @@ message GetCapacityResponse {
   repeated Capacity vgs = 1;
 }
 
+message ListStorageClassesRequest {}
+
+message StorageClass {
+  // Stable class name configured on the agent.
+  string name = 1;
+  string vg_name = 2;
+  string vg_uuid = 3;
+  string vg_state = 4;
+  int64 total_bytes = 5;
+  int64 free_bytes = 6;
+  int64 allocatable_bytes = 7;
+  int64 extent_size_bytes = 8;
+  int64 max_volume_bytes = 9;
+  google.protobuf.Timestamp observed_at = 10;
+}
+
+message ListStorageClassesResponse {
+  repeated StorageClass classes = 1;
+}
+
 message GetInfoRequest {}
 
 message GetInfoResponse {
@@ -180,6 +201,9 @@ service VolumeService {
   }
   rpc GetCapacity(GetCapacityRequest) returns (GetCapacityResponse) {
     option (google.api.http) = { get: "/v1/capacity" };
+  }
+  rpc ListStorageClasses(ListStorageClassesRequest) returns (ListStorageClassesResponse) {
+    option (google.api.http) = { get: "/v1/storage-classes" };
   }
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse) {
     option (google.api.http) = { get: "/v1/info" };

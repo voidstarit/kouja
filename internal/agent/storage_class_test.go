@@ -53,6 +53,13 @@ var _ = Describe("storage class selection", func() {
 		Expect(response.GetVgs()).To(HaveLen(1))
 		Expect(response.GetVgs()[0].GetStorageClass()).To(Equal("nvme"))
 		Expect(response.GetVgs()[0].GetVgName()).To(Equal("vg-nvme"))
+
+		classes, err := service.ListStorageClasses(context.Background(), &koujav1.ListStorageClassesRequest{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(classes.GetClasses()).To(HaveLen(1))
+		Expect(classes.GetClasses()[0].GetName()).To(Equal("nvme"))
+		Expect(classes.GetClasses()[0].GetVgName()).To(Equal("vg-nvme"))
+		Expect(classes.GetClasses()[0].GetAllocatableBytes()).To(Equal(int64(7 << 30)))
 	})
 
 	It("stores the selected VG and returns the selected class on create", func() {

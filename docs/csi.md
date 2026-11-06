@@ -170,6 +170,8 @@ volumeBindingMode: Immediate
 The controller filters hosts by the capacity response's storage class, so a
 PVC is only placed on an agent that advertises that class. A class that is not
 mapped on the agent falls back to the raw VG name for backward compatibility.
+Clients can inspect the available classes with `GET /v1/storage-classes`; the
+response includes the backing VG, availability, and current capacity.
 
 ## Controller flags
 

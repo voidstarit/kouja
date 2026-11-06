@@ -332,6 +332,25 @@ CURL=(curl --http2 --cacert ca.crt --cert admin.crt --key admin.key)
 "${CURL[@]}" https://storage.example:9443/healthz
 "${CURL[@]}" https://storage.example:9443/v1/info
 "${CURL[@]}" https://storage.example:9443/v1/capacity
+"${CURL[@]}" https://storage.example:9443/v1/storage-classes
+```
+
+`GET /v1/storage-classes` is available to any authenticated client, not only
+administrators. It returns the configured class name, backing VG, availability,
+and capacity:
+
+```json
+{
+  "classes": [
+    {
+      "name": "hdd",
+      "vgName": "kouja-hdd",
+      "vgState": "active",
+      "allocatableBytes": "264241152",
+      "maxVolumeBytes": "264241152"
+    }
+  ]
+}
 ```
 
 Create and export a 1 GiB iSCSI volume:
@@ -376,6 +395,8 @@ POST   /v1/volumes/{id}:rotate-credential
 DELETE /v1/volumes/{id}
 GET    /v1/volumes
 GET    /v1/volumes/{id}/credential
+GET    /v1/capacity
+GET    /v1/storage-classes
 POST   /v1/admin/vgs
 GET    /v1/admin/vgs
 POST   /v1/admin/drift/{id}:resolve

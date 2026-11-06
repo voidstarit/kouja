@@ -208,6 +208,7 @@ Key request fields:
 * `ResizeVolumeRequest`: `size_bytes`, `allow_shrink` (default false).
 * `DeleteVolumeRequest`: `force` (default false).
 * `GetCapacityResponse`: one entry per registered VG with `vg_name`, `vg_uuid`, `vg_state`, `total_bytes`, `free_bytes`, `allocatable_bytes`, `extent_size_bytes`, `max_volume_bytes`, and `observed_at`.
+* `ListStorageClassesResponse`: one entry per configured class with `name`, backing VG, state, and the same capacity fields.
 * `ImportVolumeRequest`: `volume_id`, `owner`, `vg`, `lv_uuid` (LVM UUID) or `lv_name`, `size_bytes`, `export_spec`, `target_name`, `lun` or `nsid`, `credential` (oneof CHAP or TLS-PSK), `allow_active_sessions`.
 * `GrantCredentialRequest`: `volume_id`, `node_id`, `node_caller_id`, `expires_at`.
 
@@ -260,7 +261,7 @@ HTTP paths:
 * `POST /v1/volumes/{volume_id}:export`, `POST /v1/volumes/{volume_id}:unexport`
 * `POST /v1/volumes/{volume_id}:resize`, `DELETE /v1/volumes/{volume_id}`
 * `GET /v1/volumes/{volume_id}/credential`, `POST /v1/volumes/{volume_id}:rotate-credential`
-* `GET /v1/capacity`, `GET /v1/info`
+* `GET /v1/capacity`, `GET /v1/storage-classes`, `GET /v1/info`
 * `POST /v1/admin/vgs`, `DELETE /v1/admin/vgs/{vg_name}`, `GET /v1/admin/vgs`
 * `POST /v1/admin/import`, `POST /v1/admin/drift/{volume_id}:resolve`, `GET /v1/admin/orphans`
 * `POST /v1/admin/ownership:transfer`, `DELETE /v1/admin/volumes/{volume_id}`
@@ -1479,6 +1480,9 @@ message RotateCredentialResponse { string credential = 1; string operation_id = 
 message Capacity { string vg_name = 1; string vg_uuid = 2; string vg_state = 3; int64 total_bytes = 4; int64 free_bytes = 5; int64 allocatable_bytes = 6; int64 extent_size_bytes = 7; int64 max_volume_bytes = 8; google.protobuf.Timestamp observed_at = 9; }
 message GetCapacityRequest {}
 message GetCapacityResponse { repeated Capacity vgs = 1; }
+message ListStorageClassesRequest {}
+message StorageClass { string name = 1; string vg_name = 2; string vg_uuid = 3; string vg_state = 4; int64 total_bytes = 5; int64 free_bytes = 6; int64 allocatable_bytes = 7; int64 extent_size_bytes = 8; int64 max_volume_bytes = 9; google.protobuf.Timestamp observed_at = 10; }
+message ListStorageClassesResponse { repeated StorageClass classes = 1; }
 message GetInfoRequest {}
 message GetInfoResponse { string host_uuid = 1; string agent_version = 2; string api_version = 3; repeated Protocol protocols = 4; repeated string auth_modes = 5; bool ready = 6; }
 
@@ -1516,6 +1520,7 @@ service VolumeService {
   rpc GetCredential(GetCredentialRequest) returns (GetCredentialResponse) { option (google.api.http) = { get: "/v1/volumes/{volume_id}/credential" }; }
   rpc RotateCredential(RotateCredentialRequest) returns (RotateCredentialResponse) { option (google.api.http) = { post: "/v1/volumes/{volume_id}:rotate-credential" body: "*" }; }
   rpc GetCapacity(GetCapacityRequest) returns (GetCapacityResponse) { option (google.api.http) = { get: "/v1/capacity" }; }
+  rpc ListStorageClasses(ListStorageClassesRequest) returns (ListStorageClassesResponse) { option (google.api.http) = { get: "/v1/storage-classes" }; }
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse) { option (google.api.http) = { get: "/v1/info" }; }
 }
 

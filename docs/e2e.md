@@ -36,6 +36,8 @@ A separate two-VM QEMU/KVM run validated the class-aware backend selection:
   `nvme: kouja-nvme` and `hdd: kouja-hdd`.
 * `GET /v1/capacity` returned both VGs with `storageClass: nvme` and
   `storageClass: hdd`.
+* `GET /v1/storage-classes`, called with a non-admin caller certificate,
+  returned both classes with their backing VGs and active capacity.
 * Creating a volume with `storageClass: hdd` and no `vg` produced an LV in
   `kouja-hdd`, and the API response reported `storageClass: hdd`.
 * The consumer logged into the iSCSI target with CHAP, wrote 8 MiB, read it
