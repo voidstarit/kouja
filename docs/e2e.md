@@ -27,6 +27,30 @@ The agent used SQLite state, an mTLS gRPC/HTTP listener, a loop-backed LVM VG, t
 
 The final two-VM test used the agent binary built after the operation-journal tombstone-retirement fix, so a stale delete operation from a previous volume cannot replay against a new volume.
 
+## Multiple storage classes on one host
+
+A separate two-VM QEMU/KVM run validated the class-aware backend selection:
+
+* The storage host had two loop-backed LVM VGs, `kouja-nvme` and `kouja-hdd`,
+  configured only through `storage.classes`:
+  `nvme: kouja-nvme` and `hdd: kouja-hdd`.
+* `GET /v1/capacity` returned both VGs with `storageClass: nvme` and
+  `storageClass: hdd`.
+* Creating a volume with `storageClass: hdd` and no `vg` produced an LV in
+  `kouja-hdd`, and the API response reported `storageClass: hdd`.
+* The consumer logged into the iSCSI target with CHAP, wrote 8 MiB, read it
+  back, and matched the MD5 (`class-hdd-iscsi-write-read-ok`).
+* Deleting while the session was active returned `SESSION_ACTIVE`; after logout
+  the delete succeeded and left no LV, backstore, or target.
+* Creating a volume with `storageClass: nvme` landed in `kouja-nvme`.
+  A request with `storageClass: nvme` and `vg: kouja-hdd` was rejected with
+  `InvalidArgument`.
+* A CSI controller pointed at the agent selected the `hdd` class for
+  `GetCapacity`, created and published a volume, returned
+  `storage_class: hdd` in the volume context, and completed an 8 MiB write/read
+  through the publish context before unpublish and delete
+  (`csi-class-publish-write-read-ok`).
+
 ## NVMe/TCP TLS
 
 `TestNVMeTLSAdapterLifecycle` passed on the storage VM:
