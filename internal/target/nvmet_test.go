@@ -17,7 +17,7 @@ func nvmeSpec() ExportSpec {
 	}
 }
 
-func TestNVMeExportObserveUnexport(t *testing.T) {
+func bddTestNVMeExportObserveUnexport(t testing.TB) {
 	fs := &removableFS{ConfigFS: NewConfigFS(t.TempDir())}
 	adapter := NewNVMe(fs)
 	spec := nvmeSpec()
@@ -64,7 +64,7 @@ func TestNVMeExportObserveUnexport(t *testing.T) {
 	}
 }
 
-func TestNVMeValidation(t *testing.T) {
+func bddTestNVMeValidation(t testing.TB) {
 	adapter := NewNVMe(&removableFS{ConfigFS: NewConfigFS(t.TempDir())})
 	bad := nvmeSpec()
 	bad.Portal = "not-a-portal"
@@ -78,7 +78,7 @@ func TestNVMeValidation(t *testing.T) {
 	}
 }
 
-func TestNVMeResizeDeleteRestoreAndSessions(t *testing.T) {
+func bddTestNVMeResizeDeleteRestoreAndSessions(t testing.TB) {
 	fs := &removableFS{ConfigFS: NewConfigFS(t.TempDir())}
 	adapter := NewNVMe(fs)
 	spec := nvmeSpec()
@@ -108,7 +108,7 @@ func TestNVMeResizeDeleteRestoreAndSessions(t *testing.T) {
 	}
 }
 
-func TestConfigFSPathAndRemove(t *testing.T) {
+func bddTestConfigFSPathAndRemove(t testing.TB) {
 	fs := NewConfigFS(t.TempDir())
 	if fs.Root() == "" {
 		t.Fatal("empty root")
@@ -157,7 +157,7 @@ func TestConfigFSPathAndRemove(t *testing.T) {
 	}
 }
 
-func TestConfigFSErrorBranches(t *testing.T) {
+func bddTestConfigFSErrorBranches(t testing.TB) {
 	fs := NewConfigFS(t.TempDir())
 	if _, err := fs.Path(""); err == nil {
 		t.Fatal("empty path did not fail")
@@ -224,7 +224,7 @@ func (fs failingFS) Symlink(target, link string) error {
 	return fs.FileSystem.Symlink(target, link)
 }
 
-func TestNVMeExportAndResizeErrorBranches(t *testing.T) {
+func bddTestNVMeExportAndResizeErrorBranches(t testing.TB) {
 	for _, marker := range []string{"attr_allow_any_host", "allowed_hosts", "namespaces/1/device_path", "subsystems/"} {
 		base := &removableFS{ConfigFS: NewConfigFS(t.TempDir())}
 		adapter := NewNVMe(failingFS{FileSystem: base, marker: marker})
@@ -243,7 +243,7 @@ func TestNVMeExportAndResizeErrorBranches(t *testing.T) {
 	}
 }
 
-func TestISCSIExportErrorBranches(t *testing.T) {
+func bddTestISCSIExportErrorBranches(t testing.TB) {
 	base := &removableFS{ConfigFS: NewConfigFS(t.TempDir())}
 	adapter := NewISCSI(failingFS{FileSystem: base, marker: "target/iscsi"})
 	if _, err := adapter.Export(context.Background(), testSpec(), testCredential()); err == nil {
@@ -256,7 +256,7 @@ func TestISCSIExportErrorBranches(t *testing.T) {
 	}
 }
 
-func TestTargetConstructorsAndValidation(t *testing.T) {
+func bddTestTargetConstructorsAndValidation(t testing.TB) {
 	if NewConfigFS("").Root() == "" {
 		t.Fatal("default configfs root is empty")
 	}
@@ -271,7 +271,7 @@ func TestTargetConstructorsAndValidation(t *testing.T) {
 	}
 }
 
-func TestTargetNoopTeardown(t *testing.T) {
+func bddTestTargetNoopTeardown(t testing.TB) {
 	nvme := NewNVMe(&removableFS{ConfigFS: NewConfigFS(t.TempDir())})
 	if err := nvme.Unexport(context.Background(), nvmeSpec(), true); err != nil {
 		t.Fatalf("missing NVMe unexport: %v", err)
@@ -287,7 +287,7 @@ func TestTargetNoopTeardown(t *testing.T) {
 	}
 }
 
-func TestIdempotentExportBranches(t *testing.T) {
+func bddTestIdempotentExportBranches(t testing.TB) {
 	nvme := NewNVMe(&removableFS{ConfigFS: NewConfigFS(t.TempDir())})
 	if _, err := nvme.Export(context.Background(), nvmeSpec(), Credential{}); err != nil {
 		t.Fatal(err)
@@ -304,7 +304,7 @@ func TestIdempotentExportBranches(t *testing.T) {
 	}
 }
 
-func TestPortalAndComponentValidation(t *testing.T) {
+func bddTestPortalAndComponentValidation(t testing.TB) {
 	if _, err := portalDirectory("bad"); err == nil {
 		t.Fatal("bad portal did not fail")
 	}
@@ -322,7 +322,7 @@ func TestPortalAndComponentValidation(t *testing.T) {
 	}
 }
 
-func TestDefaultConfigFSRoot(t *testing.T) {
+func bddTestDefaultConfigFSRoot(t testing.TB) {
 	fs := NewConfigFS("")
 	if fs.Root() != "/sys/kernel/config" {
 		t.Fatalf("root = %q", fs.Root())

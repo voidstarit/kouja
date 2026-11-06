@@ -2,7 +2,7 @@ package csi
 
 import "testing"
 
-func TestVolumeHandleRoundTrip(t *testing.T) {
+func bddTestVolumeHandleRoundTrip(t testing.TB) {
 	handle := FormatVolumeHandle("host-1", "resource-1")
 	if handle != "v1:host-1:resource-1" {
 		t.Fatalf("handle = %q", handle)
@@ -16,7 +16,7 @@ func TestVolumeHandleRoundTrip(t *testing.T) {
 	}
 }
 
-func TestVolumeHandleRejectsInvalidValues(t *testing.T) {
+func bddTestVolumeHandleRejectsInvalidValues(t testing.TB) {
 	for _, value := range []string{"", "v1:host", "v2:host:resource", "v1::resource", "v1:host:", "v1:host:resource:extra"} {
 		if _, err := ParseVolumeHandle(value); err == nil {
 			t.Fatalf("ParseVolumeHandle(%q) succeeded", value)
@@ -24,7 +24,7 @@ func TestVolumeHandleRejectsInvalidValues(t *testing.T) {
 	}
 }
 
-func TestProtocolValue(t *testing.T) {
+func bddTestProtocolValue(t testing.TB) {
 	tests := map[string]string{
 		"iscsi":       "PROTOCOL_ISCSI",
 		"nvme":        "PROTOCOL_NVME_TCP",

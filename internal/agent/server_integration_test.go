@@ -26,7 +26,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-func writeTestCertificates(t *testing.T) (caFile, serverCert, serverKey, clientCert, clientKey string) {
+func writeTestCertificates(t testing.TB) (caFile, serverCert, serverKey, clientCert, clientKey string) {
 	t.Helper()
 	dir := t.TempDir()
 	caKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -59,7 +59,7 @@ func writeTestCertificates(t *testing.T) (caFile, serverCert, serverKey, clientC
 	return caFile, serverCertFile, serverKeyFile, clientCertFile, clientKeyFile
 }
 
-func issueCertificate(t *testing.T, dir string, ca *x509.Certificate, caKey *rsa.PrivateKey, identity string, server bool) (keyFile, certFile string) {
+func issueCertificate(t testing.TB, dir string, ca *x509.Certificate, caKey *rsa.PrivateKey, identity string, server bool) (keyFile, certFile string) {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -99,7 +99,7 @@ func issueCertificate(t *testing.T, dir string, ca *x509.Certificate, caKey *rsa
 	return keyFile, certFile
 }
 
-func writePEM(t *testing.T, path, blockType string, data []byte) {
+func writePEM(t testing.TB, path, blockType string, data []byte) {
 	t.Helper()
 	file, err := os.Create(path) //nolint:gosec // temporary test certificate path
 	if err != nil {
@@ -111,7 +111,7 @@ func writePEM(t *testing.T, path, blockType string, data []byte) {
 	}
 }
 
-func TestServerServesGRPCAndHTTPOnOneTLSListener(t *testing.T) {
+func bddTestServerServesGRPCAndHTTPOnOneTLSListener(t testing.TB) {
 	caFile, serverCert, serverKey, clientCert, clientKey := writeTestCertificates(t)
 	cfg := &config.Config{}
 	cfg.Listen.Address = "127.0.0.1:0"

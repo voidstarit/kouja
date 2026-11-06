@@ -10,7 +10,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-func TestKubernetesAttachmentLookup(t *testing.T) {
+func bddTestKubernetesAttachmentLookup(t testing.TB) {
 	const (
 		handle = "v1:host-1:resource-1"
 		nodeID = "node-1"
@@ -56,7 +56,7 @@ func TestKubernetesAttachmentLookup(t *testing.T) {
 	}
 }
 
-func TestNodeFailurePolicyAndNodeUnavailable(t *testing.T) {
+func bddTestNodeFailurePolicyAndNodeUnavailable(t testing.TB) {
 	const (
 		volumeHandle = "v1:host-1:resource-1"
 		className    = "force-class"

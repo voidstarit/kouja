@@ -13,7 +13,7 @@ import (
 	"github.com/voidstarit/kouja/internal/state"
 )
 
-func openBackupStore(t *testing.T) *state.Store {
+func openBackupStore(t testing.TB) *state.Store {
 	t.Helper()
 	store, err := state.Open(context.Background(), filepath.Join(t.TempDir(), "state.db"))
 	if err != nil {
@@ -27,7 +27,7 @@ func openBackupStore(t *testing.T) *state.Store {
 	return store
 }
 
-func TestRunCreatesCompleteBundle(t *testing.T) {
+func bddTestRunCreatesCompleteBundle(t testing.TB) {
 	store := openBackupStore(t)
 	dir := t.TempDir()
 	hostIDPath := filepath.Join(dir, "host-id")
@@ -94,7 +94,7 @@ func TestRunCreatesCompleteBundle(t *testing.T) {
 	}
 }
 
-func TestRunWithoutKeyAndMissingHostID(t *testing.T) {
+func bddTestRunWithoutKeyAndMissingHostID(t testing.TB) {
 	store := openBackupStore(t)
 	dir := t.TempDir()
 	hostIDPath := filepath.Join(dir, "host-id")
@@ -146,7 +146,7 @@ func TestRunWithoutKeyAndMissingHostID(t *testing.T) {
 	}
 }
 
-func TestRunRejectsInvalidTarget(t *testing.T) {
+func bddTestRunRejectsInvalidTarget(t testing.TB) {
 	store := openBackupStore(t)
 	hostIDPath := filepath.Join(t.TempDir(), "host-id")
 	if err := os.WriteFile(hostIDPath, []byte(uuid.NewString()), 0o600); err != nil {
@@ -165,7 +165,7 @@ func TestRunRejectsInvalidTarget(t *testing.T) {
 	}
 }
 
-func TestRotateRetainsShortDailyAndWeekly(t *testing.T) {
+func bddTestRotateRetainsShortDailyAndWeekly(t testing.TB) {
 	store := openBackupStore(t)
 	dir := t.TempDir()
 	hostIDPath := filepath.Join(dir, "host-id")
@@ -214,7 +214,7 @@ func TestRotateRetainsShortDailyAndWeekly(t *testing.T) {
 	}
 }
 
-func TestBackupValidationAndCopyErrors(t *testing.T) {
+func bddTestBackupValidationAndCopyErrors(t testing.TB) {
 	store := openBackupStore(t)
 	if _, err := New(nil, Options{}); err == nil {
 		t.Fatal("nil store did not fail")
@@ -251,7 +251,7 @@ func TestBackupValidationAndCopyErrors(t *testing.T) {
 	}
 }
 
-func TestBackupDefaultsAndRunFailures(t *testing.T) {
+func bddTestBackupDefaultsAndRunFailures(t testing.TB) {
 	store := openBackupStore(t)
 	dir := t.TempDir()
 	hostID := filepath.Join(dir, "host-id")

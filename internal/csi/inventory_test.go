@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestResolveSRV(t *testing.T) {
+func bddTestResolveSRV(t testing.TB) {
 	previous := lookupSRV
 	t.Cleanup(func() { lookupSRV = previous })
 	lookupSRV = func(service, proto, name string) (string, []*net.SRV, error) {

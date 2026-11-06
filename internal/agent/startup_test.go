@@ -37,7 +37,7 @@ func (backend *startupBackend) Eligibility(_ context.Context, vg string) error {
 	return nil
 }
 
-func TestInitializeVGsSeedsOnlyOnce(t *testing.T) {
+func bddTestInitializeVGsSeedsOnlyOnce(t testing.TB) {
 	store := newAgentStore(t)
 	backend := &startupBackend{
 		fakeLVM: &fakeLVM{},
@@ -75,7 +75,7 @@ func TestInitializeVGsSeedsOnlyOnce(t *testing.T) {
 	}
 }
 
-func TestVerifyVGsMarksUnavailableAndVolumesDrift(t *testing.T) {
+func bddTestVerifyVGsMarksUnavailableAndVolumesDrift(t testing.TB) {
 	store := newAgentStore(t)
 	owner := "spiffe://kouja/caller/one"
 	addAgentVolume(t, store, owner, "vol1", "resource-1", "available")
@@ -129,7 +129,7 @@ func TestVerifyVGsMarksUnavailableAndVolumesDrift(t *testing.T) {
 	}
 }
 
-func TestVerifyVGsRejectsUUIDMismatch(t *testing.T) {
+func bddTestVerifyVGsRejectsUUIDMismatch(t testing.TB) {
 	store := newAgentStore(t)
 	owner := "spiffe://kouja/caller/one"
 	addAgentVolume(t, store, owner, "vol1", "resource-1", "available")
@@ -156,7 +156,7 @@ func TestVerifyVGsRejectsUUIDMismatch(t *testing.T) {
 	}
 }
 
-func fetchStoredVolume(t *testing.T, store *state.Store, owner, volumeID string) (state.Volume, error) {
+func fetchStoredVolume(t testing.TB, store *state.Store, owner, volumeID string) (state.Volume, error) {
 	t.Helper()
 	var volume state.Volume
 	err := store.Transact(context.Background(), func(tx state.Tx) error {

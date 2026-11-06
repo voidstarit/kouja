@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func addDriftExport(t *testing.T, store *state.Store, owner string) {
+func addDriftExport(t testing.TB, store *state.Store, owner string) {
 	t.Helper()
 	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
 	if err := store.Transact(context.Background(), func(tx state.Tx) error {
@@ -29,9 +29,9 @@ func addDriftExport(t *testing.T, store *state.Store, owner string) {
 	}
 }
 
-func TestResolveDriftMarkActions(t *testing.T) {
+func bddTestResolveDriftMarkActions(t testing.TB) {
 	owner := "spiffe://kouja/caller/one"
-	newService := func(t *testing.T, present bool, targetPresent bool) (*AdminService, *state.Store) {
+	newService := func(t testing.TB, present bool, targetPresent bool) (*AdminService, *state.Store) {
 		t.Helper()
 		store := newAgentStore(t)
 		addAgentVolume(t, store, owner, "vol1", "resource-1", "drift")
@@ -51,7 +51,7 @@ func TestResolveDriftMarkActions(t *testing.T) {
 		return NewAdminService(store, backend, WithTargetExporters(map[string]target.Exporter{"iscsi": exporter})), store
 	}
 
-	t.Run("mark available", func(t *testing.T) {
+	bddSubtest(t, "mark available", func(t testing.TB) {
 		service, store := newService(t, true, false)
 		response, err := service.ResolveDrift(adminContext(), &koujav1.ResolveDriftRequest{
 			Owner: owner, VolumeId: "vol1", Action: koujav1.ResolveAction_RESOLVE_ACTION_MARK_AVAILABLE,
@@ -68,7 +68,7 @@ func TestResolveDriftMarkActions(t *testing.T) {
 		}
 	})
 
-	t.Run("mark exported", func(t *testing.T) {
+	bddSubtest(t, "mark exported", func(t testing.TB) {
 		service, store := newService(t, true, true)
 		response, err := service.ResolveDrift(adminContext(), &koujav1.ResolveDriftRequest{
 			Owner: owner, VolumeId: "vol1", Action: koujav1.ResolveAction_RESOLVE_ACTION_MARK_EXPORTED,
@@ -93,7 +93,7 @@ func TestResolveDriftMarkActions(t *testing.T) {
 		}
 	})
 
-	t.Run("mark failed", func(t *testing.T) {
+	bddSubtest(t, "mark failed", func(t testing.TB) {
 		service, store := newService(t, true, false)
 		if _, err := service.ResolveDrift(adminContext(), &koujav1.ResolveDriftRequest{
 			Owner: owner, VolumeId: "vol1", Action: koujav1.ResolveAction_RESOLVE_ACTION_MARK_FAILED,
@@ -106,7 +106,7 @@ func TestResolveDriftMarkActions(t *testing.T) {
 		}
 	})
 
-	t.Run("mark deleted", func(t *testing.T) {
+	bddSubtest(t, "mark deleted", func(t testing.TB) {
 		service, store := newService(t, false, false)
 		if _, err := service.ResolveDrift(adminContext(), &koujav1.ResolveDriftRequest{
 			Owner: owner, VolumeId: "vol1", Action: koujav1.ResolveAction_RESOLVE_ACTION_MARK_DELETED,
@@ -124,7 +124,7 @@ func TestResolveDriftMarkActions(t *testing.T) {
 		}
 	})
 
-	t.Run("mark available rejects present target", func(t *testing.T) {
+	bddSubtest(t, "mark available rejects present target", func(t testing.TB) {
 		service, _ := newService(t, true, true)
 		if _, err := service.ResolveDrift(adminContext(), &koujav1.ResolveDriftRequest{
 			Owner: owner, VolumeId: "vol1", Action: koujav1.ResolveAction_RESOLVE_ACTION_MARK_AVAILABLE,
@@ -133,7 +133,7 @@ func TestResolveDriftMarkActions(t *testing.T) {
 		}
 	})
 
-	t.Run("non admin rejected", func(t *testing.T) {
+	bddSubtest(t, "non admin rejected", func(t testing.TB) {
 		service, _ := newService(t, true, false)
 		if _, err := service.ResolveDrift(callerContext(owner), &koujav1.ResolveDriftRequest{
 			Owner: owner, VolumeId: "vol1", Action: koujav1.ResolveAction_RESOLVE_ACTION_MARK_FAILED,
@@ -143,7 +143,7 @@ func TestResolveDriftMarkActions(t *testing.T) {
 	})
 }
 
-func TestResolveDriftRecreateExport(t *testing.T) {
+func bddTestResolveDriftRecreateExport(t testing.TB) {
 	owner := "spiffe://kouja/caller/one"
 	store := newAgentStore(t)
 	addAgentVolume(t, store, owner, "vol1", "resource-1", "drift")

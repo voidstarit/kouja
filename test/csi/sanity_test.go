@@ -11,7 +11,7 @@ import (
 // TestSanity runs the upstream csi-sanity binary when CSI_ENDPOINT is set.
 // It is intentionally separate from the unit suite because csi-sanity needs a
 // live CSI socket and, for node tests, a staging directory.
-func TestSanity(t *testing.T) {
+func bddTestSanity(t testing.TB) {
 	endpoint := os.Getenv("CSI_ENDPOINT")
 	if endpoint == "" {
 		t.Skip("set CSI_ENDPOINT to a live CSI socket")

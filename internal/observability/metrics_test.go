@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestMetricsHandler(t *testing.T) {
+func bddTestMetricsHandler(t testing.TB) {
 	metrics := New()
 	metrics.Inc("test_counter")
 	metrics.Set("test_gauge", 3)
@@ -18,7 +18,7 @@ func TestMetricsHandler(t *testing.T) {
 	}
 }
 
-func TestMetricsRenderAndNilReceiver(t *testing.T) {
+func bddTestMetricsRenderAndNilReceiver(t testing.TB) {
 	metrics := New()
 	metrics.Inc("counter")
 	metrics.Set("gauge", 2)

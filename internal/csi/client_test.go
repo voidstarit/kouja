@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func writeTestTLS(t *testing.T) (certFile, keyFile, caFile string) {
+func writeTestTLS(t testing.TB) (certFile, keyFile, caFile string) {
 	t.Helper()
 	directory := t.TempDir()
 	caKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -60,7 +60,7 @@ func writeTestTLS(t *testing.T) (certFile, keyFile, caFile string) {
 	return
 }
 
-func TestNewKubernetesAttachmentLookup(t *testing.T) {
+func bddTestNewKubernetesAttachmentLookup(t testing.TB) {
 	kubeconfig := filepath.Join(t.TempDir(), "config")
 	content := `apiVersion: v1
 kind: Config
@@ -93,7 +93,7 @@ users:
 	}
 }
 
-func TestLoadTLSConfigAndControllerLifecycle(t *testing.T) {
+func bddTestLoadTLSConfigAndControllerLifecycle(t testing.TB) {
 	certFile, keyFile, caFile := writeTestTLS(t)
 	tlsConfig, err := LoadTLSConfig(certFile, keyFile, caFile)
 	if err != nil {

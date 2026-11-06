@@ -21,7 +21,7 @@ func (fs *removableFS) Remove(rel string) error {
 	return os.RemoveAll(path)
 }
 
-func newTestISCSI(t *testing.T) (*ISCSI, *removableFS) {
+func newTestISCSI(t testing.TB) (*ISCSI, *removableFS) {
 	t.Helper()
 	fs := &removableFS{ConfigFS: NewConfigFS(t.TempDir())}
 	return NewISCSI(fs), fs
@@ -45,7 +45,7 @@ func testCredential() Credential {
 	return Credential{Username: "kouja-user", Secret: "kouja-secret", Keyring: ""}
 }
 
-func addSessionFile(t *testing.T, fs *ConfigFS, targetName, value string) {
+func addSessionFile(t testing.TB, fs *ConfigFS, targetName, value string) {
 	t.Helper()
 	dir := filepath.ToSlash(filepath.Join("target/iscsi", targetName, "fabric_statistics/iscsi_instance"))
 	if err := fs.Mkdir(dir); err != nil {
@@ -56,7 +56,7 @@ func addSessionFile(t *testing.T, fs *ConfigFS, targetName, value string) {
 	}
 }
 
-func TestISCSIExportObserveUnexportDelete(t *testing.T) {
+func bddTestISCSIExportObserveUnexportDelete(t testing.TB) {
 	adapter, fs := newTestISCSI(t)
 	spec := testSpec()
 	result, err := adapter.Export(context.Background(), spec, testCredential())
@@ -137,7 +137,7 @@ func TestISCSIExportObserveUnexportDelete(t *testing.T) {
 	}
 }
 
-func TestISCSIUnexportUnknownSessionRequiresForce(t *testing.T) {
+func bddTestISCSIUnexportUnknownSessionRequiresForce(t testing.TB) {
 	adapter, fs := newTestISCSI(t)
 	spec := testSpec()
 	if _, err := adapter.Export(context.Background(), spec, testCredential()); err != nil {
@@ -161,7 +161,7 @@ func TestISCSIUnexportUnknownSessionRequiresForce(t *testing.T) {
 	}
 }
 
-func TestISCSIListSessions(t *testing.T) {
+func bddTestISCSIListSessions(t testing.TB) {
 	adapter, fs := newTestISCSI(t)
 	addSessionFile(t, fs.ConfigFS, "iqn.2026-11.io.kouja:one", "0\n")
 	addSessionFile(t, fs.ConfigFS, "iqn.2026-11.io.kouja:two", "1\n")
@@ -181,7 +181,7 @@ func TestISCSIListSessions(t *testing.T) {
 	}
 }
 
-func TestISCSIValidationAndBackstoreConflict(t *testing.T) {
+func bddTestISCSIValidationAndBackstoreConflict(t testing.TB) {
 	adapter, fs := newTestISCSI(t)
 	spec := testSpec()
 	if _, err := adapter.Export(context.Background(), spec, Credential{}); !errors.Is(err, ErrInvalid) {
@@ -208,7 +208,7 @@ func TestISCSIValidationAndBackstoreConflict(t *testing.T) {
 	}
 }
 
-func TestConfigFSPathValidationAndSymlink(t *testing.T) {
+func bddTestConfigFSPathValidationAndSymlink(t testing.TB) {
 	fs := NewConfigFS(t.TempDir())
 	if _, err := fs.Path("../escape"); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("escape path = %v, want ErrInvalid", err)
@@ -233,7 +233,7 @@ func TestConfigFSPathValidationAndSymlink(t *testing.T) {
 	}
 }
 
-func TestISCSIResizeAndRestore(t *testing.T) {
+func bddTestISCSIResizeAndRestore(t testing.TB) {
 	adapter, fs := newTestISCSI(t)
 	spec := testSpec()
 	if err := adapter.Restore(context.Background(), spec, testCredential()); err != nil {

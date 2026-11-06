@@ -19,7 +19,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func testCertificate(t *testing.T, san string) *x509.Certificate {
+func testCertificate(t testing.TB, san string) *x509.Certificate {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -48,7 +48,7 @@ func testCertificate(t *testing.T, san string) *x509.Certificate {
 	return certificate
 }
 
-func TestUnaryInterceptorPropagatesIdentityAndRequestID(t *testing.T) {
+func bddTestUnaryInterceptorPropagatesIdentityAndRequestID(t testing.TB) {
 	certificate := testCertificate(t, "spiffe://kouja/caller/test")
 	ctx := peer.NewContext(context.Background(), &peer.Peer{
 		AuthInfo: credentials.TLSInfo{State: tls.ConnectionState{PeerCertificates: []*x509.Certificate{certificate}}},
@@ -72,7 +72,7 @@ func TestUnaryInterceptorPropagatesIdentityAndRequestID(t *testing.T) {
 	}
 }
 
-func TestUnaryInterceptorRejectsMissingOrInvalidCertificate(t *testing.T) {
+func bddTestUnaryInterceptorRejectsMissingOrInvalidCertificate(t testing.TB) {
 	if _, err := UnaryInterceptor(context.Background(), nil, nil, func(context.Context, any) (any, error) {
 		return nil, nil
 	}); status.Code(err) != codes.Unauthenticated {

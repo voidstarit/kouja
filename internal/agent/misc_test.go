@@ -14,7 +14,7 @@ import (
 	"github.com/voidstarit/kouja/internal/state"
 )
 
-func TestAgentProtoMappings(t *testing.T) {
+func bddTestAgentProtoMappings(t testing.TB) {
 	observation := toProtoObservation(state.Observation{
 		LVPresent: true, ObservedSizeBytes: 10, DevicePath: "/dev/x", ObservedAt: time.Now(), Source: "lvm",
 	}, state.ExportObservation{
@@ -62,7 +62,7 @@ func TestAgentProtoMappings(t *testing.T) {
 	}
 }
 
-func TestCheckDependenciesWithFakeTools(t *testing.T) {
+func bddTestCheckDependenciesWithFakeTools(t testing.TB) {
 	dir := t.TempDir()
 	for _, name := range []string{"lvs", "vgs", "pvs", "lvcreate", "lvremove", "lvchange", "udevadm", "findmnt", "blockdev", "systemctl"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil { //nolint:gosec // executable test fixture
@@ -81,7 +81,7 @@ func TestCheckDependenciesWithFakeTools(t *testing.T) {
 	}
 }
 
-func TestAgentAdmissionAndIdentityErrors(t *testing.T) {
+func bddTestAgentAdmissionAndIdentityErrors(t testing.TB) {
 	manager := &fakeCredentialManager{err: errors.New("missing")}
 	service := NewVolumeService(newAgentStore(t), &fakeLVM{}, &fakeRunner{}, manager, ServiceOptions{})
 	if _, err := service.GetInfo(context.Background(), &koujav1.GetInfoRequest{}); err != nil {
@@ -99,7 +99,7 @@ func TestAgentAdmissionAndIdentityErrors(t *testing.T) {
 	_ = WithDriftRetrier(nil)
 }
 
-func TestInfoAndListBranches(t *testing.T) {
+func bddTestInfoAndListBranches(t testing.TB) {
 	store := newAgentStore(t)
 	ready := false
 	service := NewVolumeService(store, &fakeLVM{}, &fakeRunner{}, &fakeCredentialManager{}, ServiceOptions{
@@ -120,7 +120,7 @@ func TestInfoAndListBranches(t *testing.T) {
 	}
 }
 
-func TestCapacityAdmissionAndReadyBranches(t *testing.T) {
+func bddTestCapacityAdmissionAndReadyBranches(t testing.TB) {
 	store := newAgentStore(t)
 	admission := NewAdmission(1, 1, 1)
 	service := NewVolumeService(store, &fakeLVM{}, &fakeRunner{}, &fakeCredentialManager{}, ServiceOptions{
@@ -138,7 +138,7 @@ func TestCapacityAdmissionAndReadyBranches(t *testing.T) {
 	}
 }
 
-func TestVolumeServiceIdentityFailures(t *testing.T) {
+func bddTestVolumeServiceIdentityFailures(t testing.TB) {
 	store := newAgentStore(t)
 	service := NewVolumeService(store, &fakeLVM{}, &fakeRunner{}, &fakeCredentialManager{}, ServiceOptions{})
 	if _, err := service.GetCredential(context.Background(), &koujav1.GetCredentialRequest{VolumeId: "vol"}); err == nil {
@@ -152,7 +152,7 @@ func TestVolumeServiceIdentityFailures(t *testing.T) {
 	}
 }
 
-func TestCapacityUnavailableBranch(t *testing.T) {
+func bddTestCapacityUnavailableBranch(t testing.TB) {
 	store := newAgentStore(t)
 	addAgentVolume(t, store, "owner", "vol1", "resource-1", "available")
 	service := NewVolumeService(store, &fakeLVM{capacityErr: errors.New("lvm offline")}, &fakeRunner{}, &fakeCredentialManager{}, ServiceOptions{})
@@ -162,7 +162,7 @@ func TestCapacityUnavailableBranch(t *testing.T) {
 	}
 }
 
-func TestRequestIDAndNilErrors(t *testing.T) {
+func bddTestRequestIDAndNilErrors(t testing.TB) {
 	if statusError(nil) != nil {
 		t.Fatal("nil error did not map to nil")
 	}

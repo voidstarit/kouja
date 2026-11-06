@@ -12,7 +12,7 @@ import (
 	"github.com/voidstarit/kouja/internal/state"
 )
 
-func openState(t *testing.T) *state.Store {
+func openState(t testing.TB) *state.Store {
 	t.Helper()
 	store, err := state.Open(context.Background(), filepath.Join(t.TempDir(), "state.db"))
 	if err != nil {
@@ -26,7 +26,7 @@ func openState(t *testing.T) *state.Store {
 	return store
 }
 
-func addVolume(t *testing.T, store *state.Store) {
+func addVolume(t testing.TB, store *state.Store) {
 	t.Helper()
 	now := time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC)
 	err := store.Transact(context.Background(), func(tx state.Tx) error {
@@ -51,7 +51,7 @@ func addVolume(t *testing.T, store *state.Store) {
 	}
 }
 
-func TestEnsureCreatesPersistsAndRepairsFile(t *testing.T) {
+func bddTestEnsureCreatesPersistsAndRepairsFile(t testing.TB) {
 	store := openState(t)
 	path := filepath.Join(t.TempDir(), "host-id")
 	manager := New(path, store)
@@ -97,7 +97,7 @@ func TestEnsureCreatesPersistsAndRepairsFile(t *testing.T) {
 	}
 }
 
-func TestMismatchAndMissingFileWithVolumesFailClosed(t *testing.T) {
+func bddTestMismatchAndMissingFileWithVolumesFailClosed(t testing.TB) {
 	store := openState(t)
 	addVolume(t, store)
 	path := filepath.Join(t.TempDir(), "host-id")
@@ -115,7 +115,7 @@ func TestMismatchAndMissingFileWithVolumesFailClosed(t *testing.T) {
 	}
 }
 
-func TestMismatchWithoutVolumesRepairsSetting(t *testing.T) {
+func bddTestMismatchWithoutVolumesRepairsSetting(t testing.TB) {
 	store := openState(t)
 	path := filepath.Join(t.TempDir(), "host-id")
 	first := uuid.NewString()
@@ -148,7 +148,7 @@ func TestMismatchWithoutVolumesRepairsSetting(t *testing.T) {
 	}
 }
 
-func TestInvalidFileAndBootID(t *testing.T) {
+func bddTestInvalidFileAndBootID(t testing.TB) {
 	store := openState(t)
 	path := filepath.Join(t.TempDir(), "host-id")
 	if err := os.WriteFile(path, []byte("not-a-uuid\n"), 0o600); err != nil {
@@ -179,7 +179,7 @@ func TestInvalidFileAndBootID(t *testing.T) {
 	}
 }
 
-func TestHostIDErrorPaths(t *testing.T) {
+func bddTestHostIDErrorPaths(t testing.TB) {
 	store := openState(t)
 	if _, err := New("", store).Ensure(context.Background()); err == nil {
 		t.Fatal("empty path did not fail")
@@ -206,7 +206,7 @@ func TestHostIDErrorPaths(t *testing.T) {
 	}
 }
 
-func TestHostIDReadBootAndStoreErrors(t *testing.T) {
+func bddTestHostIDReadBootAndStoreErrors(t testing.TB) {
 	if value, err := ReadBootID(""); err != nil || value == "" {
 		t.Fatalf("default boot ID = %q, %v", value, err)
 	}
@@ -223,7 +223,7 @@ func TestHostIDReadBootAndStoreErrors(t *testing.T) {
 	}
 }
 
-func TestHostIDEnsureReadErrors(t *testing.T) {
+func bddTestHostIDEnsureReadErrors(t testing.TB) {
 	store := openState(t)
 	directory := t.TempDir()
 	if _, err := New(directory, store).Ensure(context.Background()); err == nil {
@@ -235,7 +235,7 @@ func TestHostIDEnsureReadErrors(t *testing.T) {
 	}
 }
 
-func TestHostIDWriteAndReadFailureBranches(t *testing.T) {
+func bddTestHostIDWriteAndReadFailureBranches(t testing.TB) {
 	store := openState(t)
 	blocker := filepath.Join(t.TempDir(), "blocker")
 	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
@@ -263,7 +263,7 @@ func TestHostIDWriteAndReadFailureBranches(t *testing.T) {
 	}
 }
 
-func TestHostIDInvalidStoredSetting(t *testing.T) {
+func bddTestHostIDInvalidStoredSetting(t testing.TB) {
 	store := openState(t)
 	manager := New(filepath.Join(t.TempDir(), "host-id"), store)
 	if err := store.Transact(context.Background(), func(tx state.Tx) error {

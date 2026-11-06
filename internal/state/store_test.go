@@ -13,7 +13,7 @@ import (
 
 var testTime = time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
 
-func openTestStore(t *testing.T) *Store {
+func openTestStore(t testing.TB) *Store {
 	t.Helper()
 	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "state.db"))
 	if err != nil {
@@ -27,7 +27,7 @@ func openTestStore(t *testing.T) *Store {
 	return store
 }
 
-func runTx(t *testing.T, store *Store, fn func(Tx) error) {
+func runTx(t testing.TB, store *Store, fn func(Tx) error) {
 	t.Helper()
 	if err := store.Transact(context.Background(), fn); err != nil {
 		t.Fatalf("Transact: %v", err)
@@ -38,7 +38,7 @@ func withTxErr(store *Store, fn func(Tx) error) error {
 	return store.Transact(context.Background(), fn)
 }
 
-func addVG(t *testing.T, tx Tx, name string) {
+func addVG(t testing.TB, tx Tx, name string) {
 	t.Helper()
 	if err := tx.PutVG(VG{
 		Name:         name,
@@ -51,7 +51,7 @@ func addVG(t *testing.T, tx Tx, name string) {
 	}
 }
 
-func addVolume(t *testing.T, tx Tx, owner, volumeID, vgName string) Volume {
+func addVolume(t testing.TB, tx Tx, owner, volumeID, vgName string) Volume {
 	t.Helper()
 	volume := Volume{
 		Owner:              owner,
@@ -75,7 +75,7 @@ func addVolume(t *testing.T, tx Tx, owner, volumeID, vgName string) Volume {
 	return volume
 }
 
-func TestOpenConfiguresDatabaseAndPersistsSettings(t *testing.T) {
+func bddTestOpenConfiguresDatabaseAndPersistsSettings(t testing.TB) {
 	path := filepath.Join(t.TempDir(), "state.db")
 	store, err := Open(context.Background(), path)
 	if err != nil {
@@ -154,7 +154,7 @@ func TestOpenConfiguresDatabaseAndPersistsSettings(t *testing.T) {
 	}
 }
 
-func TestVolumeExportObservationAndCascades(t *testing.T) {
+func bddTestVolumeExportObservationAndCascades(t testing.TB) {
 	store := openTestStore(t)
 	runTx(t, store, func(tx Tx) error {
 		addVG(t, tx, "vg1")
@@ -319,7 +319,7 @@ func TestVolumeExportObservationAndCascades(t *testing.T) {
 	})
 }
 
-func TestPaginationAndListing(t *testing.T) {
+func bddTestPaginationAndListing(t testing.TB) {
 	store := openTestStore(t)
 	runTx(t, store, func(tx Tx) error {
 		addVG(t, tx, "vg1")
@@ -361,7 +361,7 @@ func TestPaginationAndListing(t *testing.T) {
 	})
 }
 
-func TestOperationsAndGrants(t *testing.T) {
+func bddTestOperationsAndGrants(t testing.TB) {
 	store := openTestStore(t)
 	operation := Operation{
 		ID:                 "op-1",
@@ -461,7 +461,7 @@ func TestOperationsAndGrants(t *testing.T) {
 	})
 }
 
-func TestValidationForeignKeysAndAudit(t *testing.T) {
+func bddTestValidationForeignKeysAndAudit(t testing.TB) {
 	store := openTestStore(t)
 	runTx(t, store, func(tx Tx) error {
 		addVG(t, tx, "vg1")
@@ -557,7 +557,7 @@ func TestValidationForeignKeysAndAudit(t *testing.T) {
 	}
 }
 
-func TestSchemaNewerRejected(t *testing.T) {
+func bddTestSchemaNewerRejected(t testing.TB) {
 	path := filepath.Join(t.TempDir(), "state.db")
 	store, err := Open(context.Background(), path)
 	if err != nil {
@@ -575,7 +575,7 @@ func TestSchemaNewerRejected(t *testing.T) {
 	}
 }
 
-func TestBackupCreatesRestorableCopy(t *testing.T) {
+func bddTestBackupCreatesRestorableCopy(t testing.TB) {
 	store := openTestStore(t)
 	runTx(t, store, func(tx Tx) error {
 		return tx.PutSetting("host_uuid", "host-1")
@@ -611,7 +611,7 @@ func TestBackupCreatesRestorableCopy(t *testing.T) {
 	}
 }
 
-func TestTransactionRollback(t *testing.T) {
+func bddTestTransactionRollback(t testing.TB) {
 	store := openTestStore(t)
 	marker := errors.New("rollback")
 	if err := withTxErr(store, func(tx Tx) error {
@@ -628,7 +628,7 @@ func TestTransactionRollback(t *testing.T) {
 	})
 }
 
-func TestStateMiscellaneousCoverage(t *testing.T) {
+func bddTestStateMiscellaneousCoverage(t testing.TB) {
 	store := openTestStore(t)
 	if SchemaVersion() == 0 {
 		t.Fatal("schema version is zero")
@@ -750,7 +750,7 @@ func TestStateMiscellaneousCoverage(t *testing.T) {
 	}
 }
 
-func TestStateValidationBranches(t *testing.T) {
+func bddTestStateValidationBranches(t testing.TB) {
 	store := openTestStore(t)
 	runTx(t, store, func(tx Tx) error {
 		if _, err := tx.GetVolume("", "v"); !errors.Is(err, ErrInvalid) {
@@ -829,7 +829,7 @@ func TestStateValidationBranches(t *testing.T) {
 	}
 }
 
-func TestNormalizePageAndObservationValidation(t *testing.T) {
+func bddTestNormalizePageAndObservationValidation(t testing.TB) {
 	if limit, _ := normalizePage(Page{}); limit != 50 {
 		t.Fatalf("default page = %d", limit)
 	}
