@@ -95,7 +95,7 @@ supported for the TLS-required NVMe path.
 - `ktls-utils` with `tlshd` active for NVMe/TCP
 - `nvme-cli` for PSK generation and validation
 - configfs mounted at `/sys/kernel/config`
-- an LVM volume group dedicated to kouja; do not point kouja at the root VG
+- one or more LVM volume groups dedicated to kouja; do not point kouja at the root VG
 - a server certificate, server private key, and client CA for mTLS
 
 ### Initiator nodes
@@ -287,6 +287,37 @@ targets:
 
 The VGs listed under `storage.vgs` are registered on startup. An administrator
 can also register one through the admin API.
+
+### Multiple storage classes on one host
+
+A single agent can serve several LVM backends. Map a stable class name to each
+volume group, for example the NVMe, SSD, and HDD pools on one physical machine:
+
+```yaml
+storage:
+  headroom_percent: 5
+  headroom_min_bytes: 1073741824
+  wipe_timeout_seconds: 1800
+  classes:
+    nvme: kouja-nvme
+    ssd: kouja-ssd
+    hdd: kouja-hdd
+```
+
+The VGs referenced by `classes` are added to the first-start registration set.
+
+```sh
+sudo vgcreate kouja-nvme /dev/disk/by-id/<nvme-device>
+sudo vgcreate kouja-ssd  /dev/disk/by-id/<ssd-device>
+sudo vgcreate kouja-hdd  /dev/disk/by-id/<hdd-device>
+```
+
+Callers select a class in the API with `storage_class`, or in Kubernetes with
+the StorageClass parameter `class`. The agent resolves the class to its VG and
+reports the class on capacity and volume responses. A raw `vg` parameter still
+works for existing callers; when no class map is configured, the VG name is
+used as its own class. The VG remains the durable backend identity; the class
+is the selection and presentation label.
 
 ## API quick start
 

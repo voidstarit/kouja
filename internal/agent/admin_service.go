@@ -32,6 +32,7 @@ type AdminService struct {
 	exporters map[string]target.Exporter
 	creds     credential.Manager
 	retrier   DriftRetrier
+	classes   map[string]string
 }
 
 type AdminOption func(*AdminService)
@@ -51,6 +52,12 @@ func WithCredentialManager(creds credential.Manager) AdminOption {
 func WithDriftRetrier(retrier DriftRetrier) AdminOption {
 	return func(service *AdminService) {
 		service.retrier = retrier
+	}
+}
+
+func WithStorageClasses(classes map[string]string) AdminOption {
+	return func(service *AdminService) {
+		service.classes = classes
 	}
 }
 
@@ -89,7 +96,7 @@ func (service *AdminService) RegisterVG(ctx context.Context, request *koujav1.Re
 		return nil, statusError(err)
 	}
 	return &koujav1.RegisterVGResponse{
-		Capacity: toProtoCapacity(capacity), RequestId: requestID(ctx, request.GetRequestId()),
+		Capacity: service.capacityProto(capacity), RequestId: requestID(ctx, request.GetRequestId()),
 	}, nil
 }
 
@@ -129,10 +136,11 @@ func (service *AdminService) ListVGs(ctx context.Context, _ *koujav1.ListVGsRequ
 		if err != nil {
 			response.Vgs = append(response.Vgs, &koujav1.Capacity{
 				VgName: vg.Name, VgUuid: vg.UUID, VgState: "unavailable",
+				StorageClass: storageClassForVG(service.classes, vg.Name),
 			})
 			continue
 		}
-		response.Vgs = append(response.Vgs, toProtoCapacity(capacity))
+		response.Vgs = append(response.Vgs, service.capacityProto(capacity))
 	}
 	return response, nil
 }
@@ -305,7 +313,7 @@ func (service *AdminService) ResolveDrift(ctx context.Context, request *koujav1.
 			return nil, err
 		}
 		return &koujav1.ResolveDriftResponse{
-			Volume: toProtoVolume(volume), OperationId: operationID,
+			Volume: service.volumeProto(volume), OperationId: operationID,
 			RequestId: requestID(ctx, request.GetRequestId()),
 		}, nil
 	case koujav1.ResolveAction_RESOLVE_ACTION_RETRY:
@@ -317,14 +325,14 @@ func (service *AdminService) ResolveDrift(ctx context.Context, request *koujav1.
 			return nil, statusError(err)
 		}
 		return &koujav1.ResolveDriftResponse{
-			Volume: toProtoVolume(result.Volume), OperationId: result.OperationID,
+			Volume: service.volumeProto(result.Volume), OperationId: result.OperationID,
 			RequestId: requestID(ctx, request.GetRequestId()),
 		}, nil
 	default:
 		return nil, status.Error(codes.InvalidArgument, "unsupported resolve action")
 	}
 	return &koujav1.ResolveDriftResponse{
-		Volume: toProtoVolume(volume), OperationId: operationID,
+		Volume: service.volumeProto(volume), OperationId: operationID,
 		RequestId: requestID(ctx, request.GetRequestId()),
 	}, nil
 }
@@ -473,6 +481,18 @@ func (service *AdminService) updateDrift(ctx context.Context, volume state.Volum
 			PreState: previous, PostState: post, Result: "succeeded",
 		})
 	})
+}
+
+func (service *AdminService) volumeProto(volume state.Volume) *koujav1.Volume {
+	proto := toProtoVolume(volume)
+	proto.StorageClass = storageClassForVG(service.classes, volume.VGName)
+	return proto
+}
+
+func (service *AdminService) capacityProto(capacity lvm.Capacity) *koujav1.Capacity {
+	proto := toProtoCapacity(capacity)
+	proto.StorageClass = storageClassForVG(service.classes, capacity.VGName)
+	return proto
 }
 
 func (service *AdminService) markDeleted(ctx context.Context, volume state.Volume, export *state.Export, operationID, requestID string, now time.Time) error {

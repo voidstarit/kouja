@@ -38,6 +38,8 @@ type ServiceOptions struct {
 	NVMePortals  []config.Portal
 	Ready        func() bool
 	Admission    *Admission
+	// StorageClasses maps a stable class name to an LVM volume group.
+	StorageClasses map[string]string
 }
 
 type VolumeService struct {
@@ -66,8 +68,12 @@ func (service *VolumeService) CreateVolume(ctx context.Context, request *koujav1
 	if request.GetWipe() {
 		return nil, status.Error(codes.Unimplemented, "wipe is a stage 3 operation")
 	}
-	if request.GetVolumeId() == "" || request.GetSizeBytes() <= 0 || request.GetVg() == "" {
-		return nil, status.Error(codes.InvalidArgument, "volume_id, positive size_bytes, and vg are required")
+	if request.GetVolumeId() == "" || request.GetSizeBytes() <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "volume_id and positive size_bytes are required")
+	}
+	_, vg, resolveErr := resolveStorageClass(service.options.StorageClasses, request.GetStorageClass(), request.GetVg())
+	if resolveErr != nil {
+		return nil, status.Error(codes.InvalidArgument, resolveErr.Error())
 	}
 	export := request.Export == nil || request.GetExport()
 	protocol := request.GetProtocol()
@@ -117,7 +123,7 @@ func (service *VolumeService) CreateVolume(ctx context.Context, request *koujav1
 	intent := operations.CreateIntent{
 		ResourceUUID: resourceUUID,
 		SizeBytes:    request.GetSizeBytes(),
-		VG:           request.GetVg(),
+		VG:           vg,
 		Export:       export,
 		Protocol:     protocolName,
 		Initiator:    request.GetInitiator(),
@@ -139,7 +145,7 @@ func (service *VolumeService) CreateVolume(ctx context.Context, request *koujav1
 		return nil, statusError(err)
 	}
 	response := &koujav1.CreateVolumeResponse{
-		Volume:      toProtoVolume(result.Volume),
+		Volume:      service.volumeProto(result.Volume),
 		OperationId: result.OperationID,
 		RequestId:   requestID(ctx, request.GetRequestId()),
 	}
@@ -206,7 +212,7 @@ func (service *VolumeService) ExportVolume(ctx context.Context, request *koujav1
 		return nil, statusError(err)
 	}
 	return &koujav1.ExportVolumeResponse{
-		Volume: toProtoVolume(result.Volume), Export: toProtoExport(result.Export, state.ExportObservation{}),
+		Volume: service.volumeProto(result.Volume), Export: toProtoExport(result.Export, state.ExportObservation{}),
 		OperationId: result.OperationID, RequestId: requestID(ctx, request.GetRequestId()),
 	}, nil
 }
@@ -233,7 +239,7 @@ func (service *VolumeService) UnexportVolume(ctx context.Context, request *kouja
 		return nil, statusError(err)
 	}
 	return &koujav1.UnexportVolumeResponse{
-		Volume: toProtoVolume(result.Volume), Export: toProtoExport(result.Export, state.ExportObservation{}),
+		Volume: service.volumeProto(result.Volume), Export: toProtoExport(result.Export, state.ExportObservation{}),
 		OperationId: result.OperationID, RequestId: requestID(ctx, request.GetRequestId()),
 	}, nil
 }
@@ -262,7 +268,7 @@ func (service *VolumeService) ResizeVolume(ctx context.Context, request *koujav1
 		return nil, statusError(err)
 	}
 	response := &koujav1.ResizeVolumeResponse{
-		Volume: toProtoVolume(result.Volume), RescanRequired: true,
+		Volume: service.volumeProto(result.Volume), RescanRequired: true,
 		OperationId: result.OperationID, RequestId: requestID(ctx, request.GetRequestId()),
 	}
 	if result.Export.VolumeID != "" {
@@ -305,7 +311,7 @@ func (service *VolumeService) GetVolume(ctx context.Context, request *koujav1.Ge
 		return nil, statusError(err)
 	}
 	response := &koujav1.GetVolumeResponse{
-		Desired:     toProtoVolume(volume),
+		Desired:     service.volumeProto(volume),
 		OperationId: volume.LastOperationID,
 	}
 	export, exportErr := service.getExport(ctx, identity.Owner, request.GetVolumeId())
@@ -352,7 +358,7 @@ func (service *VolumeService) ListVolumes(ctx context.Context, request *koujav1.
 	}
 	response := &koujav1.ListVolumesResponse{Volumes: make([]*koujav1.Volume, 0, len(volumes))}
 	for _, volume := range volumes {
-		response.Volumes = append(response.Volumes, toProtoVolume(volume))
+		response.Volumes = append(response.Volumes, service.volumeProto(volume))
 	}
 	if len(volumes) == limit {
 		response.NextPageToken = volumes[len(volumes)-1].VolumeID
@@ -439,10 +445,13 @@ func (service *VolumeService) GetCapacity(ctx context.Context, _ *koujav1.GetCap
 	for _, vg := range vgs {
 		capacity, err := service.lvm.Capacity(ctx, vg.Name)
 		if err != nil {
-			response.Vgs = append(response.Vgs, &koujav1.Capacity{VgName: vg.Name, VgUuid: vg.UUID, VgState: "unavailable"})
+			response.Vgs = append(response.Vgs, &koujav1.Capacity{
+				VgName: vg.Name, VgUuid: vg.UUID, VgState: "unavailable",
+				StorageClass: storageClassForVG(service.options.StorageClasses, vg.Name),
+			})
 			continue
 		}
-		response.Vgs = append(response.Vgs, toProtoCapacity(capacity))
+		response.Vgs = append(response.Vgs, service.capacityProto(capacity))
 	}
 	return response, nil
 }
@@ -602,6 +611,18 @@ func protocolProto(protocol credential.Protocol) koujav1.Protocol {
 	default:
 		return koujav1.Protocol_PROTOCOL_UNSPECIFIED
 	}
+}
+
+func (service *VolumeService) volumeProto(volume state.Volume) *koujav1.Volume {
+	proto := toProtoVolume(volume)
+	proto.StorageClass = storageClassForVG(service.options.StorageClasses, volume.VGName)
+	return proto
+}
+
+func (service *VolumeService) capacityProto(capacity lvm.Capacity) *koujav1.Capacity {
+	proto := toProtoCapacity(capacity)
+	proto.StorageClass = storageClassForVG(service.options.StorageClasses, capacity.VGName)
+	return proto
 }
 
 func toProtoVolume(volume state.Volume) *koujav1.Volume {

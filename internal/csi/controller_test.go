@@ -220,9 +220,11 @@ func (placement *fakePlacement) List(context.Context) ([]PlacementRecord, error)
 	return result, nil
 }
 
-func (placement *fakePlacement) Pending(_ context.Context, key string, host Host, volumeID string) error {
+func (placement *fakePlacement) Pending(_ context.Context, key string, host Host, volumeID, storageClass string) error {
 	placement.pending++
-	placement.records[key] = PlacementRecord{Key: key, HostUUID: host.UUID, VolumeID: volumeID, Phase: "Pending"}
+	placement.records[key] = PlacementRecord{
+		Key: key, HostUUID: host.UUID, VolumeID: volumeID, StorageClass: storageClass, Phase: "Pending",
+	}
 	return nil
 }
 

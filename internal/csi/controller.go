@@ -91,9 +91,13 @@ func (controller *Controller) CreateVolume(ctx context.Context, request *csipb.C
 	if request.GetName() == "" || request.GetCapacityRange().GetRequiredBytes() <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "name and positive required_bytes are required")
 	}
-	vg := request.GetParameters()["vg"]
-	if vg == "" {
-		return nil, status.Error(codes.InvalidArgument, "storage class parameter vg is required")
+	storageClass := strings.TrimSpace(request.GetParameters()["class"])
+	if storageClass == "" {
+		storageClass = strings.TrimSpace(request.GetParameters()["storageClass"])
+	}
+	vg := strings.TrimSpace(request.GetParameters()["vg"])
+	if storageClass == "" && vg == "" {
+		return nil, status.Error(codes.InvalidArgument, "storage class parameter class or vg is required")
 	}
 	protocol := request.GetParameters()["protocol"]
 	if protocol == "" {
@@ -123,7 +127,7 @@ func (controller *Controller) CreateVolume(ctx context.Context, request *csipb.C
 		}
 	}
 	if host == nil {
-		host, err = controller.selectHost(ctx, vg, protocol, size)
+		host, err = controller.selectHost(ctx, storageClass, vg, protocol, size)
 		if err != nil {
 			return nil, err
 		}
@@ -133,14 +137,14 @@ func (controller *Controller) CreateVolume(ctx context.Context, request *csipb.C
 		volumeID = record.VolumeID
 	}
 	if controller.placement != nil && !recorded {
-		if err := controller.placement.Pending(ctx, placementKey, Host{UUID: host.uuid, Endpoint: host.endpoint}, volumeID); err != nil {
+		if err := controller.placement.Pending(ctx, placementKey, Host{UUID: host.uuid, Endpoint: host.endpoint}, volumeID, storageClass); err != nil {
 			return nil, status.Errorf(codes.Internal, "record volume placement: %v", err)
 		}
 		recorded = true
 	}
 	export := false
 	response, err := host.volume.CreateVolume(ctx, &koujav1.CreateVolumeRequest{
-		VolumeId: volumeID, SizeBytes: size, Vg: vg,
+		VolumeId: volumeID, SizeBytes: size, Vg: vg, StorageClass: storageClass,
 		Export: &export, Protocol: protocolValue(protocol), RequestId: volumeID,
 	})
 	if err != nil {
@@ -167,9 +171,17 @@ func (controller *Controller) createResponse(request *csipb.CreateVolumeRequest,
 	if fsType == "" {
 		fsType = request.GetParameters()["csi.storage.k8s.io/fstype"]
 	}
+	storageClass := volume.GetStorageClass()
+	if storageClass == "" {
+		storageClass = request.GetParameters()["class"]
+	}
+	if storageClass == "" {
+		storageClass = volume.GetVgName()
+	}
 	volumeContext := map[string]string{
 		"endpoint": host.endpoint, "host_uuid": host.uuid, "volume_id": volume.GetVolumeId(),
-		"vg": volume.GetVgName(), "protocol": protocol, "fsType": fsType,
+		"vg": volume.GetVgName(), "storage_class": storageClass,
+		"protocol": protocol, "fsType": fsType,
 	}
 	if initiator := request.GetParameters()["initiator"]; initiator != "" {
 		volumeContext["initiator"] = initiator
@@ -449,7 +461,11 @@ func (controller *Controller) ListVolumes(ctx context.Context, request *csipb.Li
 
 func (controller *Controller) GetCapacity(ctx context.Context, request *csipb.GetCapacityRequest) (*csipb.GetCapacityResponse, error) {
 	var available, maximum int64
-	requestedVG := request.GetParameters()["vg"]
+	storageClass := strings.TrimSpace(request.GetParameters()["class"])
+	if storageClass == "" {
+		storageClass = strings.TrimSpace(request.GetParameters()["storageClass"])
+	}
+	requestedVG := strings.TrimSpace(request.GetParameters()["vg"])
 	controller.mu.RLock()
 	hosts := append([]*hostClient(nil), controller.hosts...)
 	controller.mu.RUnlock()
@@ -459,7 +475,7 @@ func (controller *Controller) GetCapacity(ctx context.Context, request *csipb.Ge
 			continue
 		}
 		for _, capacity := range response.GetVgs() {
-			if requestedVG != "" && capacity.GetVgName() != requestedVG {
+			if !capacityMatches(capacity, storageClass, requestedVG) {
 				continue
 			}
 			available += capacity.GetAllocatableBytes()
@@ -536,7 +552,7 @@ func (controller *Controller) ControllerGetVolume(ctx context.Context, request *
 	}, Status: condition}, nil
 }
 
-func (controller *Controller) selectHost(ctx context.Context, vg, protocol string, size int64) (*hostClient, error) {
+func (controller *Controller) selectHost(ctx context.Context, storageClass, vg, protocol string, size int64) (*hostClient, error) {
 	controller.mu.RLock()
 	hosts := append([]*hostClient(nil), controller.hosts...)
 	controller.mu.RUnlock()
@@ -555,7 +571,7 @@ func (controller *Controller) selectHost(ctx context.Context, vg, protocol strin
 			continue
 		}
 		for _, value := range capacity.GetVgs() {
-			if value.GetVgName() == vg && value.GetAllocatableBytes() >= size {
+			if capacityMatches(value, storageClass, vg) && value.GetAllocatableBytes() >= size {
 				return host, nil
 			}
 		}
@@ -564,6 +580,21 @@ func (controller *Controller) selectHost(ctx context.Context, vg, protocol strin
 		return nil, status.Errorf(codes.Unavailable, "no kouja host available: %v", lastErr)
 	}
 	return nil, status.Error(codes.ResourceExhausted, "no kouja host has sufficient capacity")
+}
+
+func capacityMatches(capacity *koujav1.Capacity, storageClass, vg string) bool {
+	if vg != "" && capacity.GetVgName() != vg {
+		return false
+	}
+	if storageClass == "" {
+		return true
+	}
+	if class := capacity.GetStorageClass(); class != "" {
+		return class == storageClass
+	}
+	// Older agents do not return a class. In that case the class can only be
+	// the VG name, matching the pre-class API contract.
+	return capacity.GetVgName() == storageClass
 }
 
 func supportsProtocol(ctx context.Context, host *hostClient, protocol string) bool {

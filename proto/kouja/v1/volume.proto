@@ -17,6 +17,9 @@ message CreateVolumeRequest {
   bool wipe = 7;
   string request_id = 8;
   optional bool include_credential = 9;
+  // Optional host storage class. When set, the agent resolves it to the
+  // configured LVM volume group. vg remains supported for compatibility.
+  string storage_class = 10;
 }
 
 message CreateVolumeResponse {

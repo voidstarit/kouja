@@ -105,6 +105,8 @@ spec:
   volumeLifecycleModes:
     - Persistent
 ---
+# The parameters can select a raw LVM VG (`vg`) or a host-configured storage
+# class (`class`, for example nvme/ssd/hdd). Use one or the other.
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:

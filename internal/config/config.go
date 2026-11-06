@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -41,10 +42,39 @@ type TLSConfig struct {
 }
 
 type StorageConfig struct {
-	HeadroomPercent    int64    `yaml:"headroom_percent"`
-	HeadroomMinBytes   int64    `yaml:"headroom_min_bytes"`
-	WipeTimeoutSeconds int      `yaml:"wipe_timeout_seconds"`
-	VGs                []string `yaml:"vgs"`
+	HeadroomPercent    int64             `yaml:"headroom_percent"`
+	HeadroomMinBytes   int64             `yaml:"headroom_min_bytes"`
+	WipeTimeoutSeconds int               `yaml:"wipe_timeout_seconds"`
+	VGs                []string          `yaml:"vgs"`
+	Classes            map[string]string `yaml:"classes"`
+}
+
+// EffectiveVGs returns the explicit VGs plus every VG referenced by a storage
+// class, deduplicated and in a deterministic order.
+func (cfg *Config) EffectiveVGs() []string {
+	seen := make(map[string]struct{}, len(cfg.Storage.VGs)+len(cfg.Storage.Classes))
+	result := make([]string, 0, len(cfg.Storage.VGs)+len(cfg.Storage.Classes))
+	for _, vg := range cfg.Storage.VGs {
+		if _, ok := seen[vg]; ok {
+			continue
+		}
+		seen[vg] = struct{}{}
+		result = append(result, vg)
+	}
+	classes := make([]string, 0, len(cfg.Storage.Classes))
+	for class := range cfg.Storage.Classes {
+		classes = append(classes, class)
+	}
+	sort.Strings(classes)
+	for _, class := range classes {
+		vg := cfg.Storage.Classes[class]
+		if _, ok := seen[vg]; ok {
+			continue
+		}
+		seen[vg] = struct{}{}
+		result = append(result, vg)
+	}
+	return result
 }
 
 type TargetsConfig struct {
@@ -236,6 +266,19 @@ func (cfg *Config) Validate() error {
 		if !vgNamePattern.MatchString(vg) {
 			return fmt.Errorf("%w: invalid storage.vgs entry %q", ErrInvalid, vg)
 		}
+	}
+	classVGs := make(map[string]string, len(cfg.Storage.Classes))
+	for class, vg := range cfg.Storage.Classes {
+		if !vgNamePattern.MatchString(class) {
+			return fmt.Errorf("%w: invalid storage.classes name %q", ErrInvalid, class)
+		}
+		if !vgNamePattern.MatchString(vg) {
+			return fmt.Errorf("%w: invalid storage.classes.%s VG %q", ErrInvalid, class, vg)
+		}
+		if other, ok := classVGs[vg]; ok {
+			return fmt.Errorf("%w: storage classes %q and %q reference the same VG %q", ErrInvalid, other, class, vg)
+		}
+		classVGs[vg] = class
 	}
 	if cfg.Targets.ISCSI.Enabled {
 		if err := validateTargetPortals("targets.iscsi", cfg.Targets.ISCSI.IQNPrefix, cfg.Targets.ISCSI.Portals); err != nil {

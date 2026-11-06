@@ -644,13 +644,13 @@ Credentials are encrypted at rest with AES-256-GCM. Each row stores a unique non
 * `vg_state` and `observed_at`.
 * The agent queries LVM on each request and does not persist a capacity cache.
 
-`CreateVolume` requires `vg`. The agent serializes the capacity check and the LVM allocation with a per-VG lock. The per-VG lock prevents racing kouja allocations. `ResourceExhausted` is returned when the actual LVM allocation fails or the request exceeds the current allocatable size. The CSI driver tries the next eligible host up to three times.
+`CreateVolume` requires either a configured `storage_class` or a raw `vg`. The agent resolves a class to its VG and serializes the capacity check and the LVM allocation with a per-VG lock. The per-VG lock prevents racing kouja allocations. `ResourceExhausted` is returned when the actual LVM allocation fails or the request exceeds the current allocatable size. The CSI driver tries the next eligible host up to three times.
 
 The CSI driver selects a host by:
 
 1. Resolving the StorageClass SRV record.
 2. Calling `GetInfo` and `GetCapacity` on every endpoint in parallel, with a 2-second timeout.
-3. Filtering to hosts that are ready, support the requested protocol, have the requested VG, have `vg_state=active`, and have `allocatable_bytes >= requested size` and `max_volume_bytes >= requested size`.
+3. Filtering to hosts that are ready, support the requested protocol, have the requested class or VG, have `vg_state=active`, and have `allocatable_bytes >= requested size` and `max_volume_bytes >= requested size`.
 4. Choosing the host with the largest `allocatable_bytes`; ties break by host UUID.
 5. Calling `CreateVolume`; on `ResourceExhausted`, removing that host and trying the next.
 6. Caching the inventory for at most 10 seconds; the cache is invalidated on an unreachable host or a `ResourceExhausted` response.
@@ -670,12 +670,12 @@ The driver name is `kouja.csi.voidstarit.com`. It advertises these capabilities:
 
 `CreateVolume`:
 
-1. Parse the StorageClass parameters: `srvRecord`, `vg` (required), `protocol`, optional `wipe`.
+1. Parse the StorageClass parameters: `srvRecord`, `class` or `vg` (one required), `protocol`, optional `wipe`.
 2. Derive a stable placement key from the CSI request name and StorageClass.
 3. Look up a `KoujaVolumePlacement` custom resource with `resourceVersion` compare-and-swap; the external-provisioner supplies leader election. If it exists and is `Bound`, use that host. If it is `Pending`, query the recorded host; if the volume exists, bind it; if not, resume the create on that host. If it is `Failed`, follow the recorded retry path. If the host is unreachable, return `Unavailable` and do not create on another host.
-4. If no record exists, resolve the SRV record, select a host by capacity, and write a `Pending` placement record with the selected host and an idempotency key before calling `CreateVolume` with `export=false`, the size, the VG, and `wipe`.
+4. If no record exists, resolve the SRV record, select a host by capacity, and write a `Pending` placement record with the selected host and an idempotency key before calling `CreateVolume` with `export=false`, the size, the class or VG, and `wipe`.
 5. On success, update the record to `Bound` with the returned `host_uuid` and `resource_uuid`. On failure, delete the pending record or mark it `Failed` with the error; a retry resolves the record before creating.
-6. Return `v1:<host-uuid>:<resource-uuid>` as the volume handle and the actual capacity. The volume context includes the host UUID, resource UUID, protocol, VG, control endpoint, and portal.
+6. Return `v1:<host-uuid>:<resource-uuid>` as the volume handle and the actual capacity. The volume context includes the host UUID, resource UUID, protocol, class, VG, control endpoint, and portal.
 
 If the pending record cannot be written, the driver does not call `CreateVolume`. If the response is lost, the pending record identifies the host and idempotency key, and a retry queries that host before creating anywhere else. The driver never returns a handle that is not durably recorded.
 
@@ -705,7 +705,7 @@ If the pending record cannot be written, the driver does not call `CreateVolume`
 
 `DeleteVolume` calls `DeleteVolume` with `force=false`. `SESSION_ACTIVE` is returned as a retryable error. An administrator can force-delete through the API if the consumer is gone.
 
-`GetCapacity` sums `allocatable_bytes` across ready hosts that match the StorageClass SRV record, protocol, and required VG. It returns the sum as `available_capacity` and the maximum of `max_volume_bytes` as `maximum_volume_size`. It does not reserve capacity.
+`GetCapacity` sums `allocatable_bytes` across ready hosts that match the StorageClass SRV record, protocol, and required class or VG. It returns the sum as `available_capacity` and the maximum of `max_volume_bytes` as `maximum_volume_size`. It does not reserve capacity.
 
 Node topology is empty. The first version assumes every Kubernetes node can reach every portal returned by the SRV record. An operator who needs network zones scopes the SRV record per zone and creates one StorageClass per zone.
 
@@ -809,6 +809,7 @@ storage:
   headroom_min_bytes: 1073741824
   wipe_timeout_seconds: 1800  # base; deadline is max(base, 1 second per GiB)
   vgs: []  # names to seed on first start; the admin API is authoritative afterward
+  classes: {}  # optional class -> VG mappings, e.g. nvme: vg-nvme
 targets:
   iscsi:
     enabled: true

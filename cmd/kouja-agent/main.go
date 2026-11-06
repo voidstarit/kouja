@@ -89,7 +89,7 @@ func run() error {
 	)
 	iscsi := target.NewISCSI(target.NewConfigFS(""))
 	nvme := target.NewNVMe(target.NewConfigFS(""))
-	if err := agent.InitializeVGs(context.Background(), store, lvmBackend, cfg.Storage.VGs); err != nil {
+	if err := agent.InitializeVGs(context.Background(), store, lvmBackend, cfg.EffectiveVGs()); err != nil {
 		return err
 	}
 
@@ -112,22 +112,24 @@ func run() error {
 		cfg.Admission.CapacityRequestsPerSec,
 	)
 	volumeService := agent.NewVolumeService(store, lvmBackend, manager, credentials, agent.ServiceOptions{
-		HostUUID:     hostUUID,
-		AgentVersion: agentVersion,
-		APIVersion:   apiVersion,
-		ISCSIEnabled: cfg.Targets.ISCSI.Enabled,
-		ISCSIPrefix:  cfg.Targets.ISCSI.IQNPrefix,
-		ISCSIPortals: cfg.Targets.ISCSI.Portals,
-		NVMeEnabled:  cfg.Targets.NVMeTCP.Enabled,
-		NVMePrefix:   cfg.Targets.NVMeTCP.NQNPrefix,
-		NVMePortals:  cfg.Targets.NVMeTCP.Portals,
-		Ready:        ready.Load,
-		Admission:    admission,
+		HostUUID:       hostUUID,
+		AgentVersion:   agentVersion,
+		APIVersion:     apiVersion,
+		ISCSIEnabled:   cfg.Targets.ISCSI.Enabled,
+		ISCSIPrefix:    cfg.Targets.ISCSI.IQNPrefix,
+		ISCSIPortals:   cfg.Targets.ISCSI.Portals,
+		NVMeEnabled:    cfg.Targets.NVMeTCP.Enabled,
+		NVMePrefix:     cfg.Targets.NVMeTCP.NQNPrefix,
+		NVMePortals:    cfg.Targets.NVMeTCP.Portals,
+		Ready:          ready.Load,
+		Admission:      admission,
+		StorageClasses: cfg.Storage.Classes,
 	})
 	adminService := agent.NewAdminService(store, lvmBackend,
 		agent.WithTargetExporters(map[string]target.Exporter{"iscsi": iscsi, "nvme-tcp": nvme}),
 		agent.WithCredentialManager(credentials),
 		agent.WithDriftRetrier(manager),
+		agent.WithStorageClasses(cfg.Storage.Classes),
 	)
 	server, err := agent.NewServer(cfg, volumeService, adminService,
 		agent.WithReadiness(ready.Load), agent.WithMetrics(metrics))
