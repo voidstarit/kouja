@@ -122,9 +122,16 @@ cd kouja
 
 make build              # compile all packages
 make test               # unit tests
+make test-bdd           # Ginkgo/Gomega BDD suite
 make coverage-check     # enforce >= 80% coverage under ./internal
 make lint               # go vet + golangci-lint
 ```
+
+The BDD suite lives in `test/bdd` and uses [Ginkgo](https://onsi.github.io/ginkgo/)
+and [Gomega](https://onsi.github.io/gomega/) to exercise the public volume
+lifecycle: create/export, active-session refusal, credential rotation, and
+delete. GoMock is not required yet because the core interfaces are covered by
+focused in-package test doubles.
 
 `make tools` installs the optional protobuf, CRD, and lint tools. Add
 `$(go env GOPATH)/bin` to `PATH` before running `make lint` or `make proto`.
