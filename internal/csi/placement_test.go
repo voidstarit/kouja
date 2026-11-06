@@ -25,14 +25,14 @@ func bddTestKubernetesPlacementLifecycle(t testing.TB) {
 	if _, err := placement.Get(ctx, key); !errors.Is(err, ErrPlacementNotFound) {
 		t.Fatalf("missing placement: %v", err)
 	}
-	if err := placement.Pending(ctx, key, Host{UUID: "host-1", Endpoint: "10.0.0.1:9443"}, key); err != nil {
+	if err := placement.Pending(ctx, key, Host{UUID: "host-1", Endpoint: "10.0.0.1:9443"}, key, "nvme"); err != nil {
 		t.Fatalf("pending: %v", err)
 	}
 	record, err := placement.Get(ctx, key)
 	if err != nil {
 		t.Fatalf("get pending: %v", err)
 	}
-	if record.HostUUID != "host-1" || record.VolumeID != key || record.Phase != "Pending" {
+	if record.HostUUID != "host-1" || record.VolumeID != key || record.StorageClass != "nvme" || record.Phase != "Pending" {
 		t.Fatalf("pending record: %#v", record)
 	}
 	if err := placement.Bind(ctx, key, "resource-1"); err != nil {

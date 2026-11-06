@@ -77,6 +77,9 @@ message Volume {
   google.protobuf.Timestamp created_at = 11;
   google.protobuf.Timestamp updated_at = 12;
   map<string, string> legacy_identity = 13;
+  // Storage class selected for this volume. The LVM volume group remains the
+  // canonical backend identity; this is the policy/category label.
+  string storage_class = 14;
 }
 
 message Export {
@@ -115,4 +118,7 @@ message Capacity {
   int64 extent_size_bytes = 7;
   int64 max_volume_bytes = 8;
   google.protobuf.Timestamp observed_at = 9;
+  // Storage class configured for this volume group, or the VG name when no
+  // explicit class mapping exists.
+  string storage_class = 10;
 }

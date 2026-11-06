@@ -69,7 +69,7 @@ type Inventory interface {
 type Placement interface {
 	Get(ctx context.Context, key string) (PlacementRecord, error)
 	List(ctx context.Context) ([]PlacementRecord, error)
-	Pending(ctx context.Context, key string, host Host, volumeID string) error
+	Pending(ctx context.Context, key string, host Host, volumeID, storageClass string) error
 	Bind(ctx context.Context, key string, resourceUUID string) error
 	Fail(ctx context.Context, key string, err error) error
 	Delete(ctx context.Context, key string) error

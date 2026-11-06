@@ -19,17 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	VolumeService_CreateVolume_FullMethodName     = "/kouja.v1.VolumeService/CreateVolume"
-	VolumeService_ExportVolume_FullMethodName     = "/kouja.v1.VolumeService/ExportVolume"
-	VolumeService_UnexportVolume_FullMethodName   = "/kouja.v1.VolumeService/UnexportVolume"
-	VolumeService_ResizeVolume_FullMethodName     = "/kouja.v1.VolumeService/ResizeVolume"
-	VolumeService_DeleteVolume_FullMethodName     = "/kouja.v1.VolumeService/DeleteVolume"
-	VolumeService_GetVolume_FullMethodName        = "/kouja.v1.VolumeService/GetVolume"
-	VolumeService_ListVolumes_FullMethodName      = "/kouja.v1.VolumeService/ListVolumes"
-	VolumeService_GetCredential_FullMethodName    = "/kouja.v1.VolumeService/GetCredential"
-	VolumeService_RotateCredential_FullMethodName = "/kouja.v1.VolumeService/RotateCredential"
-	VolumeService_GetCapacity_FullMethodName      = "/kouja.v1.VolumeService/GetCapacity"
-	VolumeService_GetInfo_FullMethodName          = "/kouja.v1.VolumeService/GetInfo"
+	VolumeService_CreateVolume_FullMethodName       = "/kouja.v1.VolumeService/CreateVolume"
+	VolumeService_ExportVolume_FullMethodName       = "/kouja.v1.VolumeService/ExportVolume"
+	VolumeService_UnexportVolume_FullMethodName     = "/kouja.v1.VolumeService/UnexportVolume"
+	VolumeService_ResizeVolume_FullMethodName       = "/kouja.v1.VolumeService/ResizeVolume"
+	VolumeService_DeleteVolume_FullMethodName       = "/kouja.v1.VolumeService/DeleteVolume"
+	VolumeService_GetVolume_FullMethodName          = "/kouja.v1.VolumeService/GetVolume"
+	VolumeService_ListVolumes_FullMethodName        = "/kouja.v1.VolumeService/ListVolumes"
+	VolumeService_GetCredential_FullMethodName      = "/kouja.v1.VolumeService/GetCredential"
+	VolumeService_RotateCredential_FullMethodName   = "/kouja.v1.VolumeService/RotateCredential"
+	VolumeService_GetCapacity_FullMethodName        = "/kouja.v1.VolumeService/GetCapacity"
+	VolumeService_ListStorageClasses_FullMethodName = "/kouja.v1.VolumeService/ListStorageClasses"
+	VolumeService_GetInfo_FullMethodName            = "/kouja.v1.VolumeService/GetInfo"
 )
 
 // VolumeServiceClient is the client API for VolumeService service.
@@ -46,6 +47,7 @@ type VolumeServiceClient interface {
 	GetCredential(ctx context.Context, in *GetCredentialRequest, opts ...grpc.CallOption) (*GetCredentialResponse, error)
 	RotateCredential(ctx context.Context, in *RotateCredentialRequest, opts ...grpc.CallOption) (*RotateCredentialResponse, error)
 	GetCapacity(ctx context.Context, in *GetCapacityRequest, opts ...grpc.CallOption) (*GetCapacityResponse, error)
+	ListStorageClasses(ctx context.Context, in *ListStorageClassesRequest, opts ...grpc.CallOption) (*ListStorageClassesResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 }
 
@@ -157,6 +159,16 @@ func (c *volumeServiceClient) GetCapacity(ctx context.Context, in *GetCapacityRe
 	return out, nil
 }
 
+func (c *volumeServiceClient) ListStorageClasses(ctx context.Context, in *ListStorageClassesRequest, opts ...grpc.CallOption) (*ListStorageClassesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListStorageClassesResponse)
+	err := c.cc.Invoke(ctx, VolumeService_ListStorageClasses_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *volumeServiceClient) GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetInfoResponse)
@@ -181,6 +193,7 @@ type VolumeServiceServer interface {
 	GetCredential(context.Context, *GetCredentialRequest) (*GetCredentialResponse, error)
 	RotateCredential(context.Context, *RotateCredentialRequest) (*RotateCredentialResponse, error)
 	GetCapacity(context.Context, *GetCapacityRequest) (*GetCapacityResponse, error)
+	ListStorageClasses(context.Context, *ListStorageClassesRequest) (*ListStorageClassesResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
@@ -221,6 +234,9 @@ func (UnimplementedVolumeServiceServer) RotateCredential(context.Context, *Rotat
 }
 func (UnimplementedVolumeServiceServer) GetCapacity(context.Context, *GetCapacityRequest) (*GetCapacityResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetCapacity not implemented")
+}
+func (UnimplementedVolumeServiceServer) ListStorageClasses(context.Context, *ListStorageClassesRequest) (*ListStorageClassesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListStorageClasses not implemented")
 }
 func (UnimplementedVolumeServiceServer) GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetInfo not implemented")
@@ -426,6 +442,24 @@ func _VolumeService_GetCapacity_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VolumeService_ListStorageClasses_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListStorageClassesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).ListStorageClasses(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VolumeService_ListStorageClasses_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).ListStorageClasses(ctx, req.(*ListStorageClassesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VolumeService_GetInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetInfoRequest)
 	if err := dec(in); err != nil {
@@ -490,6 +524,10 @@ var VolumeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetCapacity",
 			Handler:    _VolumeService_GetCapacity_Handler,
+		},
+		{
+			MethodName: "ListStorageClasses",
+			Handler:    _VolumeService_ListStorageClasses_Handler,
 		},
 		{
 			MethodName: "GetInfo",

@@ -37,6 +37,7 @@ storage:
   headroom_min_bytes: 1073741824
   wipe_timeout_seconds: 1800
   vgs: []
+  classes: {}
 targets:
   iscsi:
     enabled: true

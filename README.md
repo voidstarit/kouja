@@ -95,7 +95,7 @@ supported for the TLS-required NVMe path.
 - `ktls-utils` with `tlshd` active for NVMe/TCP
 - `nvme-cli` for PSK generation and validation
 - configfs mounted at `/sys/kernel/config`
-- an LVM volume group dedicated to kouja; do not point kouja at the root VG
+- one or more LVM volume groups dedicated to kouja; do not point kouja at the root VG
 - a server certificate, server private key, and client CA for mTLS
 
 ### Initiator nodes
@@ -288,6 +288,37 @@ targets:
 The VGs listed under `storage.vgs` are registered on startup. An administrator
 can also register one through the admin API.
 
+### Multiple storage classes on one host
+
+A single agent can serve several LVM backends. Map a stable class name to each
+volume group, for example the NVMe, SSD, and HDD pools on one physical machine:
+
+```yaml
+storage:
+  headroom_percent: 5
+  headroom_min_bytes: 1073741824
+  wipe_timeout_seconds: 1800
+  classes:
+    nvme: kouja-nvme
+    ssd: kouja-ssd
+    hdd: kouja-hdd
+```
+
+The VGs referenced by `classes` are added to the first-start registration set.
+
+```sh
+sudo vgcreate kouja-nvme /dev/disk/by-id/<nvme-device>
+sudo vgcreate kouja-ssd  /dev/disk/by-id/<ssd-device>
+sudo vgcreate kouja-hdd  /dev/disk/by-id/<hdd-device>
+```
+
+Callers select a class in the API with `storage_class`, or in Kubernetes with
+the StorageClass parameter `class`. The agent resolves the class to its VG and
+reports the class on capacity and volume responses. A raw `vg` parameter still
+works for existing callers; when no class map is configured, the VG name is
+used as its own class. The VG remains the durable backend identity; the class
+is the selection and presentation label.
+
 ## API quick start
 
 All API calls require a client certificate trusted by the agent. A caller with
@@ -301,6 +332,25 @@ CURL=(curl --http2 --cacert ca.crt --cert admin.crt --key admin.key)
 "${CURL[@]}" https://storage.example:9443/healthz
 "${CURL[@]}" https://storage.example:9443/v1/info
 "${CURL[@]}" https://storage.example:9443/v1/capacity
+"${CURL[@]}" https://storage.example:9443/v1/storage-classes
+```
+
+`GET /v1/storage-classes` is available to any authenticated client, not only
+administrators. It returns the configured class name, backing VG, availability,
+and capacity:
+
+```json
+{
+  "classes": [
+    {
+      "name": "hdd",
+      "vgName": "kouja-hdd",
+      "vgState": "active",
+      "allocatableBytes": "264241152",
+      "maxVolumeBytes": "264241152"
+    }
+  ]
+}
 ```
 
 Create and export a 1 GiB iSCSI volume:
@@ -345,6 +395,8 @@ POST   /v1/volumes/{id}:rotate-credential
 DELETE /v1/volumes/{id}
 GET    /v1/volumes
 GET    /v1/volumes/{id}/credential
+GET    /v1/capacity
+GET    /v1/storage-classes
 POST   /v1/admin/vgs
 GET    /v1/admin/vgs
 POST   /v1/admin/drift/{id}:resolve

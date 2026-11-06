@@ -129,7 +129,8 @@ Parameters:
 
 | Parameter | Required | Meaning |
 |---|---|---|
-| `vg` | yes | Registered LVM volume group on the selected kouja host. |
+| `class` | one of `class`/`vg` | Storage class configured on the agent, for example `nvme`, `ssd`, or `hdd`. The agent maps it to a registered LVM volume group. |
+| `vg` | one of `class`/`vg` | Registered LVM volume group on the selected kouja host. Use this for existing deployments or when no class mapping exists. |
 | `protocol` | no | `iscsi` (default) or `nvme-tcp`. The NVMe path requires TLS 1.3 PSK support on the target and `tlshd` on the node. |
 | `initiator` | yes for attach | IQN for iSCSI or NQN for NVMe-oF/TCP. It must match the node plugin's initiator. |
 | `csi.storage.k8s.io/fstype` | no | `ext4` (default in the example). `xfs` is accepted by the node formatter only when `mkfs.xfs` is present in the node image. |
@@ -139,6 +140,38 @@ Parameters:
 The initiator value is passed through the PV's volume context. A production
 deployment should derive it from the CSINode annotation described in the
 design rather than storing a single cluster-wide IQN.
+
+To expose multiple backends from the same host, map classes on the agent and
+reference them from separate Kubernetes StorageClasses:
+
+```yaml
+# agent /etc/kouja/config.yaml
+storage:
+  classes:
+    nvme: kouja-nvme
+    ssd: kouja-ssd
+    hdd: kouja-hdd
+---
+# Kubernetes
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: kouja-hdd
+provisioner: kouja.csi.voidstarit.com
+parameters:
+  class: hdd
+  protocol: iscsi
+  initiator: iqn.2026-11.io.kouja:kind-node
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+```
+
+The controller filters hosts by the capacity response's storage class, so a
+PVC is only placed on an agent that advertises that class. A class that is not
+mapped on the agent falls back to the raw VG name for backward compatibility.
+Clients can inspect the available classes with `GET /v1/storage-classes`; the
+response includes the backing VG, availability, and current capacity.
 
 ## Controller flags
 
@@ -155,7 +188,7 @@ design rather than storing a single cluster-wide IQN.
 
 `--hosts` may contain one or more agent endpoints. The controller calls
 `GetInfo` and `GetCapacity` to select a ready host that supports the requested
-protocol and has enough allocatable space in the requested VG.
+protocol and has enough allocatable space in the requested class or VG.
 
 ## Deployment notes
 

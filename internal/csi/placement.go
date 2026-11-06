@@ -79,7 +79,7 @@ func (placement *KubernetesPlacement) List(ctx context.Context) ([]PlacementReco
 	return records, nil
 }
 
-func (placement *KubernetesPlacement) Pending(ctx context.Context, key string, host Host, volumeID string) error {
+func (placement *KubernetesPlacement) Pending(ctx context.Context, key string, host Host, volumeID, storageClass string) error {
 	object := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "kouja.io/v1alpha1",
 		"kind":       "KoujaVolumePlacement",
@@ -87,7 +87,7 @@ func (placement *KubernetesPlacement) Pending(ctx context.Context, key string, h
 		"spec": map[string]any{
 			"placementKey":   key,
 			"csiVolumeName":  key,
-			"storageClass":   "",
+			"storageClass":   storageClass,
 			"hostUuid":       host.UUID,
 			"volumeId":       volumeID,
 			"idempotencyKey": volumeID,

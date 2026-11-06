@@ -208,6 +208,7 @@ Key request fields:
 * `ResizeVolumeRequest`: `size_bytes`, `allow_shrink` (default false).
 * `DeleteVolumeRequest`: `force` (default false).
 * `GetCapacityResponse`: one entry per registered VG with `vg_name`, `vg_uuid`, `vg_state`, `total_bytes`, `free_bytes`, `allocatable_bytes`, `extent_size_bytes`, `max_volume_bytes`, and `observed_at`.
+* `ListStorageClassesResponse`: one entry per configured class with `name`, backing VG, state, and the same capacity fields.
 * `ImportVolumeRequest`: `volume_id`, `owner`, `vg`, `lv_uuid` (LVM UUID) or `lv_name`, `size_bytes`, `export_spec`, `target_name`, `lun` or `nsid`, `credential` (oneof CHAP or TLS-PSK), `allow_active_sessions`.
 * `GrantCredentialRequest`: `volume_id`, `node_id`, `node_caller_id`, `expires_at`.
 
@@ -260,7 +261,7 @@ HTTP paths:
 * `POST /v1/volumes/{volume_id}:export`, `POST /v1/volumes/{volume_id}:unexport`
 * `POST /v1/volumes/{volume_id}:resize`, `DELETE /v1/volumes/{volume_id}`
 * `GET /v1/volumes/{volume_id}/credential`, `POST /v1/volumes/{volume_id}:rotate-credential`
-* `GET /v1/capacity`, `GET /v1/info`
+* `GET /v1/capacity`, `GET /v1/storage-classes`, `GET /v1/info`
 * `POST /v1/admin/vgs`, `DELETE /v1/admin/vgs/{vg_name}`, `GET /v1/admin/vgs`
 * `POST /v1/admin/import`, `POST /v1/admin/drift/{volume_id}:resolve`, `GET /v1/admin/orphans`
 * `POST /v1/admin/ownership:transfer`, `DELETE /v1/admin/volumes/{volume_id}`
@@ -644,13 +645,13 @@ Credentials are encrypted at rest with AES-256-GCM. Each row stores a unique non
 * `vg_state` and `observed_at`.
 * The agent queries LVM on each request and does not persist a capacity cache.
 
-`CreateVolume` requires `vg`. The agent serializes the capacity check and the LVM allocation with a per-VG lock. The per-VG lock prevents racing kouja allocations. `ResourceExhausted` is returned when the actual LVM allocation fails or the request exceeds the current allocatable size. The CSI driver tries the next eligible host up to three times.
+`CreateVolume` requires either a configured `storage_class` or a raw `vg`. The agent resolves a class to its VG and serializes the capacity check and the LVM allocation with a per-VG lock. The per-VG lock prevents racing kouja allocations. `ResourceExhausted` is returned when the actual LVM allocation fails or the request exceeds the current allocatable size. The CSI driver tries the next eligible host up to three times.
 
 The CSI driver selects a host by:
 
 1. Resolving the StorageClass SRV record.
 2. Calling `GetInfo` and `GetCapacity` on every endpoint in parallel, with a 2-second timeout.
-3. Filtering to hosts that are ready, support the requested protocol, have the requested VG, have `vg_state=active`, and have `allocatable_bytes >= requested size` and `max_volume_bytes >= requested size`.
+3. Filtering to hosts that are ready, support the requested protocol, have the requested class or VG, have `vg_state=active`, and have `allocatable_bytes >= requested size` and `max_volume_bytes >= requested size`.
 4. Choosing the host with the largest `allocatable_bytes`; ties break by host UUID.
 5. Calling `CreateVolume`; on `ResourceExhausted`, removing that host and trying the next.
 6. Caching the inventory for at most 10 seconds; the cache is invalidated on an unreachable host or a `ResourceExhausted` response.
@@ -670,12 +671,12 @@ The driver name is `kouja.csi.voidstarit.com`. It advertises these capabilities:
 
 `CreateVolume`:
 
-1. Parse the StorageClass parameters: `srvRecord`, `vg` (required), `protocol`, optional `wipe`.
+1. Parse the StorageClass parameters: `srvRecord`, `class` or `vg` (one required), `protocol`, optional `wipe`.
 2. Derive a stable placement key from the CSI request name and StorageClass.
 3. Look up a `KoujaVolumePlacement` custom resource with `resourceVersion` compare-and-swap; the external-provisioner supplies leader election. If it exists and is `Bound`, use that host. If it is `Pending`, query the recorded host; if the volume exists, bind it; if not, resume the create on that host. If it is `Failed`, follow the recorded retry path. If the host is unreachable, return `Unavailable` and do not create on another host.
-4. If no record exists, resolve the SRV record, select a host by capacity, and write a `Pending` placement record with the selected host and an idempotency key before calling `CreateVolume` with `export=false`, the size, the VG, and `wipe`.
+4. If no record exists, resolve the SRV record, select a host by capacity, and write a `Pending` placement record with the selected host and an idempotency key before calling `CreateVolume` with `export=false`, the size, the class or VG, and `wipe`.
 5. On success, update the record to `Bound` with the returned `host_uuid` and `resource_uuid`. On failure, delete the pending record or mark it `Failed` with the error; a retry resolves the record before creating.
-6. Return `v1:<host-uuid>:<resource-uuid>` as the volume handle and the actual capacity. The volume context includes the host UUID, resource UUID, protocol, VG, control endpoint, and portal.
+6. Return `v1:<host-uuid>:<resource-uuid>` as the volume handle and the actual capacity. The volume context includes the host UUID, resource UUID, protocol, class, VG, control endpoint, and portal.
 
 If the pending record cannot be written, the driver does not call `CreateVolume`. If the response is lost, the pending record identifies the host and idempotency key, and a retry queries that host before creating anywhere else. The driver never returns a handle that is not durably recorded.
 
@@ -705,7 +706,7 @@ If the pending record cannot be written, the driver does not call `CreateVolume`
 
 `DeleteVolume` calls `DeleteVolume` with `force=false`. `SESSION_ACTIVE` is returned as a retryable error. An administrator can force-delete through the API if the consumer is gone.
 
-`GetCapacity` sums `allocatable_bytes` across ready hosts that match the StorageClass SRV record, protocol, and required VG. It returns the sum as `available_capacity` and the maximum of `max_volume_bytes` as `maximum_volume_size`. It does not reserve capacity.
+`GetCapacity` sums `allocatable_bytes` across ready hosts that match the StorageClass SRV record, protocol, and required class or VG. It returns the sum as `available_capacity` and the maximum of `max_volume_bytes` as `maximum_volume_size`. It does not reserve capacity.
 
 Node topology is empty. The first version assumes every Kubernetes node can reach every portal returned by the SRV record. An operator who needs network zones scopes the SRV record per zone and creates one StorageClass per zone.
 
@@ -809,6 +810,7 @@ storage:
   headroom_min_bytes: 1073741824
   wipe_timeout_seconds: 1800  # base; deadline is max(base, 1 second per GiB)
   vgs: []  # names to seed on first start; the admin API is authoritative afterward
+  classes: {}  # optional class -> VG mappings, e.g. nvme: vg-nvme
 targets:
   iscsi:
     enabled: true
@@ -1478,6 +1480,9 @@ message RotateCredentialResponse { string credential = 1; string operation_id = 
 message Capacity { string vg_name = 1; string vg_uuid = 2; string vg_state = 3; int64 total_bytes = 4; int64 free_bytes = 5; int64 allocatable_bytes = 6; int64 extent_size_bytes = 7; int64 max_volume_bytes = 8; google.protobuf.Timestamp observed_at = 9; }
 message GetCapacityRequest {}
 message GetCapacityResponse { repeated Capacity vgs = 1; }
+message ListStorageClassesRequest {}
+message StorageClass { string name = 1; string vg_name = 2; string vg_uuid = 3; string vg_state = 4; int64 total_bytes = 5; int64 free_bytes = 6; int64 allocatable_bytes = 7; int64 extent_size_bytes = 8; int64 max_volume_bytes = 9; google.protobuf.Timestamp observed_at = 10; }
+message ListStorageClassesResponse { repeated StorageClass classes = 1; }
 message GetInfoRequest {}
 message GetInfoResponse { string host_uuid = 1; string agent_version = 2; string api_version = 3; repeated Protocol protocols = 4; repeated string auth_modes = 5; bool ready = 6; }
 
@@ -1515,6 +1520,7 @@ service VolumeService {
   rpc GetCredential(GetCredentialRequest) returns (GetCredentialResponse) { option (google.api.http) = { get: "/v1/volumes/{volume_id}/credential" }; }
   rpc RotateCredential(RotateCredentialRequest) returns (RotateCredentialResponse) { option (google.api.http) = { post: "/v1/volumes/{volume_id}:rotate-credential" body: "*" }; }
   rpc GetCapacity(GetCapacityRequest) returns (GetCapacityResponse) { option (google.api.http) = { get: "/v1/capacity" }; }
+  rpc ListStorageClasses(ListStorageClassesRequest) returns (ListStorageClassesResponse) { option (google.api.http) = { get: "/v1/storage-classes" }; }
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse) { option (google.api.http) = { get: "/v1/info" }; }
 }
 

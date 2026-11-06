@@ -413,6 +413,24 @@ func local_request_VolumeService_GetCapacity_0(ctx context.Context, marshaler ru
 	return msg, metadata, err
 }
 
+func request_VolumeService_ListStorageClasses_0(ctx context.Context, marshaler runtime.Marshaler, client VolumeServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListStorageClassesRequest
+		metadata runtime.ServerMetadata
+	)
+	msg, err := client.ListStorageClasses(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_VolumeService_ListStorageClasses_0(ctx context.Context, marshaler runtime.Marshaler, server VolumeServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListStorageClassesRequest
+		metadata runtime.ServerMetadata
+	)
+	msg, err := server.ListStorageClasses(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 func request_VolumeService_GetInfo_0(ctx context.Context, marshaler runtime.Marshaler, client VolumeServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq GetInfoRequest
@@ -636,6 +654,26 @@ func RegisterVolumeServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 			return
 		}
 		forward_VolumeService_GetCapacity_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_VolumeService_ListStorageClasses_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/kouja.v1.VolumeService/ListStorageClasses", runtime.WithHTTPPathPattern("/v1/storage-classes"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_VolumeService_ListStorageClasses_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_VolumeService_ListStorageClasses_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodGet, pattern_VolumeService_GetInfo_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -867,6 +905,23 @@ func RegisterVolumeServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		}
 		forward_VolumeService_GetCapacity_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodGet, pattern_VolumeService_ListStorageClasses_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/kouja.v1.VolumeService/ListStorageClasses", runtime.WithHTTPPathPattern("/v1/storage-classes"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_VolumeService_ListStorageClasses_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_VolumeService_ListStorageClasses_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodGet, pattern_VolumeService_GetInfo_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -888,29 +943,31 @@ func RegisterVolumeServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 }
 
 var (
-	pattern_VolumeService_CreateVolume_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "volumes"}, ""))
-	pattern_VolumeService_ExportVolume_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "volumes", "volume_id"}, "export"))
-	pattern_VolumeService_UnexportVolume_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "volumes", "volume_id"}, "unexport"))
-	pattern_VolumeService_ResizeVolume_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "volumes", "volume_id"}, "resize"))
-	pattern_VolumeService_DeleteVolume_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "volumes", "volume_id"}, ""))
-	pattern_VolumeService_GetVolume_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "volumes", "volume_id"}, ""))
-	pattern_VolumeService_ListVolumes_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "volumes"}, ""))
-	pattern_VolumeService_GetCredential_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "volumes", "volume_id", "credential"}, ""))
-	pattern_VolumeService_RotateCredential_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "volumes", "volume_id"}, "rotate-credential"))
-	pattern_VolumeService_GetCapacity_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "capacity"}, ""))
-	pattern_VolumeService_GetInfo_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "info"}, ""))
+	pattern_VolumeService_CreateVolume_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "volumes"}, ""))
+	pattern_VolumeService_ExportVolume_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "volumes", "volume_id"}, "export"))
+	pattern_VolumeService_UnexportVolume_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "volumes", "volume_id"}, "unexport"))
+	pattern_VolumeService_ResizeVolume_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "volumes", "volume_id"}, "resize"))
+	pattern_VolumeService_DeleteVolume_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "volumes", "volume_id"}, ""))
+	pattern_VolumeService_GetVolume_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "volumes", "volume_id"}, ""))
+	pattern_VolumeService_ListVolumes_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "volumes"}, ""))
+	pattern_VolumeService_GetCredential_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "volumes", "volume_id", "credential"}, ""))
+	pattern_VolumeService_RotateCredential_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "volumes", "volume_id"}, "rotate-credential"))
+	pattern_VolumeService_GetCapacity_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "capacity"}, ""))
+	pattern_VolumeService_ListStorageClasses_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "storage-classes"}, ""))
+	pattern_VolumeService_GetInfo_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "info"}, ""))
 )
 
 var (
-	forward_VolumeService_CreateVolume_0     = runtime.ForwardResponseMessage
-	forward_VolumeService_ExportVolume_0     = runtime.ForwardResponseMessage
-	forward_VolumeService_UnexportVolume_0   = runtime.ForwardResponseMessage
-	forward_VolumeService_ResizeVolume_0     = runtime.ForwardResponseMessage
-	forward_VolumeService_DeleteVolume_0     = runtime.ForwardResponseMessage
-	forward_VolumeService_GetVolume_0        = runtime.ForwardResponseMessage
-	forward_VolumeService_ListVolumes_0      = runtime.ForwardResponseMessage
-	forward_VolumeService_GetCredential_0    = runtime.ForwardResponseMessage
-	forward_VolumeService_RotateCredential_0 = runtime.ForwardResponseMessage
-	forward_VolumeService_GetCapacity_0      = runtime.ForwardResponseMessage
-	forward_VolumeService_GetInfo_0          = runtime.ForwardResponseMessage
+	forward_VolumeService_CreateVolume_0       = runtime.ForwardResponseMessage
+	forward_VolumeService_ExportVolume_0       = runtime.ForwardResponseMessage
+	forward_VolumeService_UnexportVolume_0     = runtime.ForwardResponseMessage
+	forward_VolumeService_ResizeVolume_0       = runtime.ForwardResponseMessage
+	forward_VolumeService_DeleteVolume_0       = runtime.ForwardResponseMessage
+	forward_VolumeService_GetVolume_0          = runtime.ForwardResponseMessage
+	forward_VolumeService_ListVolumes_0        = runtime.ForwardResponseMessage
+	forward_VolumeService_GetCredential_0      = runtime.ForwardResponseMessage
+	forward_VolumeService_RotateCredential_0   = runtime.ForwardResponseMessage
+	forward_VolumeService_GetCapacity_0        = runtime.ForwardResponseMessage
+	forward_VolumeService_ListStorageClasses_0 = runtime.ForwardResponseMessage
+	forward_VolumeService_GetInfo_0            = runtime.ForwardResponseMessage
 )
