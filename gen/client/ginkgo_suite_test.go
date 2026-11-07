@@ -37,6 +37,9 @@ var _ = Describe("unit tests", func() {
 	It("TestHTTPClientErrors", func() {
 		bddTestHTTPClientErrors(GinkgoTB())
 	})
+	It("TestErrorRetryability", func() {
+		bddTestErrorRetryability(GinkgoTB())
+	})
 	It("TestHTTPClientValidation", func() {
 		bddTestHTTPClientValidation(GinkgoTB())
 	})

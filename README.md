@@ -162,7 +162,8 @@ httpClient, err := client.NewHTTPFromFiles("https://"+target, certFile, keyFile,
 ```
 
 See [Client SDK](docs/clients.md) for complete examples, request-ID
-propagation, error handling, and regeneration instructions.
+propagation, and regeneration instructions. Error reasons and retryability are
+documented in [Client Errors and Retries](docs/client-errors.md).
 
 ## Install the agent
 

@@ -15,6 +15,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,6 +25,7 @@ import (
 	"strings"
 
 	pb "github.com/voidstarit/kouja/gen/kouja/v1"
+	errdetails "google.golang.org/genproto/googleapis/rpc/errdetails"
 	statuspb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -259,13 +261,27 @@ func (client *HTTP) CloseIdleConnections() {
 }
 
 // Error is returned when the agent responds with a non-2xx HTTP status. The
-// code and message come from the grpc-gateway google.rpc.Status error body when
-// one is present.
+// code, message, and details come from the grpc-gateway google.rpc.Status
+// error body when one is present.
 type Error struct {
 	HTTPStatus int
 	Code       codes.Code
-	Message    string
-	Details    []*anypb.Any
+	// Reason is the stable kouja reason from google.rpc.ErrorInfo, such as
+	// "SESSION_ACTIVE" or "UNAVAILABLE".
+	Reason string
+	// Message is the human-readable error message.
+	Message string
+	// OperationID identifies the journaled operation, when the error came from
+	// an operation rather than a request guard.
+	OperationID string
+	// Retryable is the server's retryable flag from google.rpc.ErrorInfo. It is
+	// false when ErrorInfo was not present; use [IsRetryable] to apply the
+	// code-based fallback.
+	Retryable bool
+	// Details contains the raw google.rpc.Status details.
+	Details []*anypb.Any
+
+	hasErrorInfo bool
 }
 
 // Error implements error.
@@ -289,7 +305,22 @@ func (err *Error) Error() string {
 	return fmt.Sprintf("client: %s: %s", err.Code, err.Message)
 }
 
-// GRPCStatus lets grpc/status translate an HTTP error into a gRPC status.
+// IsRetryable reports whether the server marked this HTTP error as retryable.
+// If the response did not contain google.rpc.ErrorInfo, it falls back to the
+// gRPC code: Unavailable, DeadlineExceeded, and ResourceExhausted are treated
+// as retryable, and every other code is not.
+func (err *Error) IsRetryable() bool {
+	if err == nil {
+		return false
+	}
+	if err.hasErrorInfo {
+		return err.Retryable
+	}
+	return retryableCode(err.Code)
+}
+
+// GRPCStatus lets grpc/status translate an HTTP error into a gRPC status. The
+// original google.rpc.Status details, including kouja ErrorInfo, are preserved.
 func (err *Error) GRPCStatus() *status.Status {
 	if err == nil {
 		return status.New(codes.Unknown, "")
@@ -298,7 +329,84 @@ func (err *Error) GRPCStatus() *status.Status {
 	if code == codes.OK {
 		code = codes.Unknown
 	}
-	return status.New(code, err.Message)
+	return status.FromProto(&statuspb.Status{
+		Code:    int32(code), //nolint:gosec // gRPC codes are non-negative
+		Message: err.Message,
+		Details: err.Details,
+	})
+}
+
+// IsRetryable reports whether err is safe to retry according to the agent's
+// google.rpc.ErrorInfo metadata. If the error has no ErrorInfo, it falls back
+// to the gRPC code: Unavailable, DeadlineExceeded, and ResourceExhausted are
+// retryable, and every other code is not.
+//
+// Transport errors that never produced an agent response are not classified;
+// retry those with backoff only when the request is idempotent.
+func IsRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	var httpErr *Error
+	if errors.As(err, &httpErr) {
+		return httpErr.IsRetryable()
+	}
+	if info, ok := ErrorInfo(err); ok {
+		return strings.EqualFold(info.GetMetadata()["retryable"], "true")
+	}
+	return retryableCode(status.Code(err))
+}
+
+// ErrorInfo returns the kouja google.rpc.ErrorInfo detail from an agent error.
+// It works for errors returned by both the gRPC and HTTP clients.
+func ErrorInfo(err error) (*errdetails.ErrorInfo, bool) {
+	if err == nil {
+		return nil, false
+	}
+	var httpErr *Error
+	if errors.As(err, &httpErr) {
+		return errorInfoFromDetails(httpErr.Details)
+	}
+	for _, detail := range status.Convert(err).Details() {
+		if info, ok := detail.(*errdetails.ErrorInfo); ok {
+			return info, true
+		}
+	}
+	return nil, false
+}
+
+func errorInfoFromDetails(details []*anypb.Any) (*errdetails.ErrorInfo, bool) {
+	for _, detail := range details {
+		if detail == nil || !detail.MessageIs(&errdetails.ErrorInfo{}) {
+			continue
+		}
+		info := &errdetails.ErrorInfo{}
+		if err := detail.UnmarshalTo(info); err != nil {
+			continue
+		}
+		return info, true
+	}
+	return nil, false
+}
+
+func populateErrorInfo(result *Error) {
+	info, ok := errorInfoFromDetails(result.Details)
+	if !ok {
+		return
+	}
+	result.Reason = info.GetReason()
+	result.OperationID = info.GetMetadata()["operation_id"]
+	result.Retryable = strings.EqualFold(info.GetMetadata()["retryable"], "true")
+	result.hasErrorInfo = true
+}
+
+func retryableCode(code codes.Code) bool {
+	switch code {
+	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:
+		return true
+	default:
+		return false
+	}
 }
 
 func (client *HTTP) do(ctx context.Context, method, path string, query url.Values, request, response proto.Message) error {
@@ -363,6 +471,7 @@ func decodeHTTPError(response *http.Response) error {
 		result.Code = codes.Code(protoStatus.GetCode()) //nolint:gosec // google.rpc.Code values are non-negative
 		result.Message = protoStatus.GetMessage()
 		result.Details = protoStatus.GetDetails()
+		populateErrorInfo(result)
 	} else {
 		result.Message = strings.TrimSpace(string(payload))
 	}

@@ -110,9 +110,9 @@ sends it as `x-request-id` metadata and the HTTP client sends it as the
 `X-Request-Id` header, matching the agent's request-ID propagation.
 
 HTTP errors are returned as `*client.Error`. It exposes the HTTP status, the
-gRPC code, the message, and any `google.rpc.Status` details. It also implements
-`GRPCStatus()`, so `status.Code` and `status.Convert` work across both
-transports:
+gRPC code, the kouja reason, the operation ID, and any `google.rpc.Status`
+details. It also implements `GRPCStatus()`, so `status.Code` and
+`status.Convert` work across both transports:
 
 ```go
 _, err := httpClient.GetVolume(ctx, &koujav1.GetVolumeRequest{VolumeId: "missing"})
@@ -120,6 +120,10 @@ if status.Code(err) == codes.NotFound {
 	// handle a missing volume
 }
 ```
+
+Use `client.IsRetryable(err)` to decide whether a request is safe to retry.
+The complete reason table, retry rules, and mutation idempotency guidance are
+in [Client Errors and Retries](client-errors.md).
 
 ## Regenerating clients and the OpenAPI document
 
