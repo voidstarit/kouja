@@ -1,0 +1,1686 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "kouja API",
+    "description": "Per-host block storage agent API. All endpoints require a client certificate trusted by the agent.",
+    "version": "v1"
+  },
+  "tags": [
+    {
+      "name": "AdminService"
+    },
+    {
+      "name": "VolumeService"
+    }
+  ],
+  "schemes": [
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/admin/vgs": {
+      "get": {
+        "operationId": "ListVGs",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ListVGsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "tags": [
+          "AdminService"
+        ]
+      },
+      "post": {
+        "operationId": "RegisterVG",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/RegisterVGResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RegisterVGRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/vgs/{vgName}": {
+      "delete": {
+        "operationId": "DeregisterVG",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/DeregisterVGResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vgName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "requestId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/import": {
+      "post": {
+        "operationId": "ImportVolume",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ImportVolumeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ImportVolumeRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/drift/{volumeId}:resolve": {
+      "post": {
+        "operationId": "ResolveDrift",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ResolveDriftResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "volumeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ResolveDriftBody"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/orphans": {
+      "get": {
+        "operationId": "ListOrphans",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ListOrphansResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/volumes/{volumeId}:wipe": {
+      "post": {
+        "operationId": "WipeVolume",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/WipeVolumeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "volumeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/WipeVolumeBody"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/ownership:transfer": {
+      "post": {
+        "operationId": "TransferOwnership",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/TransferOwnershipResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TransferOwnershipRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/volumes/{volumeId}": {
+      "delete": {
+        "operationId": "AdminDeleteVolume",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/AdminDeleteVolumeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "volumeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "acknowledgeDataLoss",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "owner",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "requestId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/grants": {
+      "post": {
+        "operationId": "GrantCredential",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/GrantCredentialResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/GrantCredentialRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/grants/{volumeId}/{nodeId}": {
+      "delete": {
+        "operationId": "RevokeGrant",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/RevokeGrantResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "volumeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "nodeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "owner",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "requestId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/volumes": {
+      "get": {
+        "operationId": "ListVolumes",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ListVolumesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageToken",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VolumeService"
+        ]
+      },
+      "post": {
+        "operationId": "CreateVolume",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/CreateVolumeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CreateVolumeRequest"
+            }
+          }
+        ],
+        "tags": [
+          "VolumeService"
+        ]
+      }
+    },
+    "/v1/volumes/{volumeId}:export": {
+      "post": {
+        "operationId": "ExportVolume",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ExportVolumeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "volumeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExportVolumeBody"
+            }
+          }
+        ],
+        "tags": [
+          "VolumeService"
+        ]
+      }
+    },
+    "/v1/volumes/{volumeId}:unexport": {
+      "post": {
+        "operationId": "UnexportVolume",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/UnexportVolumeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "volumeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/UnexportVolumeBody"
+            }
+          }
+        ],
+        "tags": [
+          "VolumeService"
+        ]
+      }
+    },
+    "/v1/volumes/{volumeId}:resize": {
+      "post": {
+        "operationId": "ResizeVolume",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ResizeVolumeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "volumeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ResizeVolumeBody"
+            }
+          }
+        ],
+        "tags": [
+          "VolumeService"
+        ]
+      }
+    },
+    "/v1/volumes/{volumeId}": {
+      "get": {
+        "operationId": "GetVolume",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/GetVolumeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "volumeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VolumeService"
+        ]
+      },
+      "delete": {
+        "operationId": "DeleteVolume",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/DeleteVolumeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "volumeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "requestId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VolumeService"
+        ]
+      }
+    },
+    "/v1/volumes/{volumeId}/credential": {
+      "get": {
+        "operationId": "GetCredential",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/GetCredentialResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "volumeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "owner",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VolumeService"
+        ]
+      }
+    },
+    "/v1/volumes/{volumeId}:rotate-credential": {
+      "post": {
+        "operationId": "RotateCredential",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/RotateCredentialResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "volumeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RotateCredentialBody"
+            }
+          }
+        ],
+        "tags": [
+          "VolumeService"
+        ]
+      }
+    },
+    "/v1/capacity": {
+      "get": {
+        "operationId": "GetCapacity",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/GetCapacityResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "tags": [
+          "VolumeService"
+        ]
+      }
+    },
+    "/v1/storage-classes": {
+      "get": {
+        "operationId": "ListStorageClasses",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ListStorageClassesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "tags": [
+          "VolumeService"
+        ]
+      }
+    },
+    "/v1/info": {
+      "get": {
+        "operationId": "GetInfo",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/GetInfoResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "tags": [
+          "VolumeService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "AdminDeleteVolumeResponse": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "Any": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "Capacity": {
+      "type": "object",
+      "properties": {
+        "vgName": {
+          "type": "string"
+        },
+        "vgUuid": {
+          "type": "string"
+        },
+        "vgState": {
+          "type": "string"
+        },
+        "totalBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "freeBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "allocatableBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "extentSizeBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "maxVolumeBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "storageClass": {
+          "type": "string",
+          "description": "Storage class configured for this volume group, or the VG name when no\nexplicit class mapping exists."
+        }
+      }
+    },
+    "CreateVolumeRequest": {
+      "type": "object",
+      "properties": {
+        "volumeId": {
+          "type": "string"
+        },
+        "sizeBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "vg": {
+          "type": "string"
+        },
+        "export": {
+          "type": "boolean",
+          "x-nullable": true
+        },
+        "protocol": {
+          "$ref": "#/definitions/Protocol"
+        },
+        "initiator": {
+          "type": "string"
+        },
+        "wipe": {
+          "type": "boolean"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "includeCredential": {
+          "type": "boolean",
+          "x-nullable": true
+        },
+        "storageClass": {
+          "type": "string",
+          "description": "Optional host storage class. When set, the agent resolves it to the\nconfigured LVM volume group. vg remains supported for compatibility."
+        }
+      }
+    },
+    "CreateVolumeResponse": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "$ref": "#/definitions/Volume"
+        },
+        "export": {
+          "$ref": "#/definitions/Export"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "DeleteVolumeResponse": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "DeregisterVGResponse": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "DriftReason": {
+      "type": "string",
+      "enum": [
+        "DRIFT_REASON_UNSPECIFIED",
+        "DRIFT_REASON_LV_ABSENT",
+        "DRIFT_REASON_SIZE_MISMATCH",
+        "DRIFT_REASON_TARGET_ABSENT",
+        "DRIFT_REASON_NAMESPACE_ABSENT",
+        "DRIFT_REASON_ACL_ABSENT",
+        "DRIFT_REASON_INITIATOR_MISMATCH",
+        "DRIFT_REASON_UNATTRIBUTED_SESSION"
+      ],
+      "default": "DRIFT_REASON_UNSPECIFIED"
+    },
+    "Export": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "$ref": "#/definitions/Protocol"
+        },
+        "initiator": {
+          "type": "string"
+        },
+        "targetName": {
+          "type": "string"
+        },
+        "lun": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "nsid": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "portal": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/definitions/ExportState"
+        },
+        "sessionState": {
+          "$ref": "#/definitions/SessionState"
+        },
+        "credential": {
+          "type": "string",
+          "title": "owner-only; omitted from list responses"
+        }
+      }
+    },
+    "ExportState": {
+      "type": "string",
+      "enum": [
+        "EXPORT_STATE_UNSPECIFIED",
+        "EXPORT_STATE_EXPORTING",
+        "EXPORT_STATE_EXPORTED",
+        "EXPORT_STATE_UNEXPORTING",
+        "EXPORT_STATE_UNEXPORTED",
+        "EXPORT_STATE_FAILED",
+        "EXPORT_STATE_DRIFT"
+      ],
+      "default": "EXPORT_STATE_UNSPECIFIED"
+    },
+    "ExportVolumeBody": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "$ref": "#/definitions/Protocol"
+        },
+        "initiator": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "rotateCredential": {
+          "type": "boolean",
+          "description": "Rotate the credential and re-create the target on this export. The\nattachment_id makes retries idempotent while a new node/controller\nattachment gets a new secret."
+        },
+        "force": {
+          "type": "boolean"
+        },
+        "attachmentId": {
+          "type": "string"
+        }
+      }
+    },
+    "ExportVolumeResponse": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "$ref": "#/definitions/Volume"
+        },
+        "export": {
+          "$ref": "#/definitions/Export"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "GetCapacityResponse": {
+      "type": "object",
+      "properties": {
+        "vgs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/Capacity"
+          }
+        }
+      }
+    },
+    "GetCredentialResponse": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "$ref": "#/definitions/Protocol"
+        },
+        "credential": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        }
+      }
+    },
+    "GetInfoResponse": {
+      "type": "object",
+      "properties": {
+        "hostUuid": {
+          "type": "string"
+        },
+        "agentVersion": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "protocols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Protocol"
+          }
+        },
+        "authModes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ready": {
+          "type": "boolean"
+        }
+      }
+    },
+    "GetVolumeResponse": {
+      "type": "object",
+      "properties": {
+        "desired": {
+          "$ref": "#/definitions/Volume"
+        },
+        "observed": {
+          "$ref": "#/definitions/Observation"
+        },
+        "export": {
+          "$ref": "#/definitions/Export"
+        },
+        "driftReasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DriftReason"
+          }
+        },
+        "operationId": {
+          "type": "string"
+        }
+      }
+    },
+    "GrantCredentialRequest": {
+      "type": "object",
+      "properties": {
+        "volumeId": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "nodeCallerId": {
+          "type": "string"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "GrantCredentialResponse": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "ImportVolumeRequest": {
+      "type": "object",
+      "properties": {
+        "volumeId": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "vg": {
+          "type": "string"
+        },
+        "lvUuid": {
+          "type": "string"
+        },
+        "lvName": {
+          "type": "string"
+        },
+        "sizeBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "protocol": {
+          "$ref": "#/definitions/Protocol"
+        },
+        "initiator": {
+          "type": "string"
+        },
+        "targetName": {
+          "type": "string"
+        },
+        "lun": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "nsid": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "credential": {
+          "type": "string",
+          "format": "byte"
+        },
+        "allowActiveSessions": {
+          "type": "boolean"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "ImportVolumeResponse": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "$ref": "#/definitions/Volume"
+        },
+        "export": {
+          "$ref": "#/definitions/Export"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "ListOrphansResponse": {
+      "type": "object",
+      "properties": {
+        "orphans": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/Volume"
+          }
+        }
+      }
+    },
+    "ListStorageClassesResponse": {
+      "type": "object",
+      "properties": {
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/StorageClass"
+          }
+        }
+      }
+    },
+    "ListVGsResponse": {
+      "type": "object",
+      "properties": {
+        "vgs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/Capacity"
+          }
+        }
+      }
+    },
+    "ListVolumesResponse": {
+      "type": "object",
+      "properties": {
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/Volume"
+          }
+        },
+        "nextPageToken": {
+          "type": "string"
+        }
+      }
+    },
+    "Observation": {
+      "type": "object",
+      "properties": {
+        "lvPresent": {
+          "type": "boolean"
+        },
+        "observedSizeBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "devicePath": {
+          "type": "string"
+        },
+        "targetPresent": {
+          "type": "boolean"
+        },
+        "namespacePresent": {
+          "type": "boolean"
+        },
+        "aclPresent": {
+          "type": "boolean"
+        },
+        "activeSessions": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "sessionState": {
+          "$ref": "#/definitions/SessionState"
+        },
+        "observedInitiator": {
+          "type": "string"
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "Protocol": {
+      "type": "string",
+      "enum": [
+        "PROTOCOL_UNSPECIFIED",
+        "PROTOCOL_ISCSI",
+        "PROTOCOL_NVME_TCP"
+      ],
+      "default": "PROTOCOL_UNSPECIFIED"
+    },
+    "RegisterVGRequest": {
+      "type": "object",
+      "properties": {
+        "vgName": {
+          "type": "string"
+        },
+        "vgUuid": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "RegisterVGResponse": {
+      "type": "object",
+      "properties": {
+        "capacity": {
+          "$ref": "#/definitions/Capacity"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "ResizeVolumeBody": {
+      "type": "object",
+      "properties": {
+        "sizeBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "allowShrink": {
+          "type": "boolean"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "ResizeVolumeResponse": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "$ref": "#/definitions/Volume"
+        },
+        "export": {
+          "$ref": "#/definitions/Export"
+        },
+        "rescanRequired": {
+          "type": "boolean"
+        },
+        "reconnectRequired": {
+          "type": "boolean"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "ResolveAction": {
+      "type": "string",
+      "enum": [
+        "RESOLVE_ACTION_UNSPECIFIED",
+        "RESOLVE_ACTION_MARK_FAILED",
+        "RESOLVE_ACTION_MARK_AVAILABLE",
+        "RESOLVE_ACTION_MARK_EXPORTED",
+        "RESOLVE_ACTION_MARK_DELETED",
+        "RESOLVE_ACTION_RETRY",
+        "RESOLVE_ACTION_RECREATE_EXPORT"
+      ],
+      "default": "RESOLVE_ACTION_UNSPECIFIED"
+    },
+    "ResolveDriftBody": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/definitions/ResolveAction"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "ResolveDriftResponse": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "$ref": "#/definitions/Volume"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "RevokeGrantResponse": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "RotateCredentialBody": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "RotateCredentialResponse": {
+      "type": "object",
+      "properties": {
+        "credential": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "SessionState": {
+      "type": "string",
+      "enum": [
+        "SESSION_STATE_UNSPECIFIED",
+        "SESSION_STATE_NONE",
+        "SESSION_STATE_ACTIVE",
+        "SESSION_STATE_UNKNOWN"
+      ],
+      "default": "SESSION_STATE_UNSPECIFIED"
+    },
+    "Status": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/Any"
+          }
+        }
+      }
+    },
+    "StorageClass": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Stable class name configured on the agent."
+        },
+        "vgName": {
+          "type": "string"
+        },
+        "vgUuid": {
+          "type": "string"
+        },
+        "vgState": {
+          "type": "string"
+        },
+        "totalBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "freeBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "allocatableBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "extentSizeBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "maxVolumeBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "TransferOwnershipRequest": {
+      "type": "object",
+      "properties": {
+        "volumeId": {
+          "type": "string"
+        },
+        "newOwner": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "TransferOwnershipResponse": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "$ref": "#/definitions/Volume"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "UnexportVolumeBody": {
+      "type": "object",
+      "properties": {
+        "force": {
+          "type": "boolean"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "UnexportVolumeResponse": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "$ref": "#/definitions/Volume"
+        },
+        "export": {
+          "$ref": "#/definitions/Export"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "Volume": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string"
+        },
+        "volumeId": {
+          "type": "string"
+        },
+        "resourceUuid": {
+          "type": "string"
+        },
+        "lvName": {
+          "type": "string"
+        },
+        "vgName": {
+          "type": "string"
+        },
+        "requestedSizeBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "actualSizeBytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "state": {
+          "$ref": "#/definitions/VolumeState"
+        },
+        "driftReasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DriftReason"
+          }
+        },
+        "lvUuid": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "legacyIdentity": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "storageClass": {
+          "type": "string",
+          "description": "Storage class selected for this volume. The LVM volume group remains the\ncanonical backend identity; this is the policy/category label."
+        }
+      }
+    },
+    "VolumeState": {
+      "type": "string",
+      "enum": [
+        "VOLUME_STATE_UNSPECIFIED",
+        "VOLUME_STATE_CREATING",
+        "VOLUME_STATE_AVAILABLE",
+        "VOLUME_STATE_EXPORTING",
+        "VOLUME_STATE_EXPORTED",
+        "VOLUME_STATE_RESIZING",
+        "VOLUME_STATE_DELETING",
+        "VOLUME_STATE_DELETED",
+        "VOLUME_STATE_FAILED",
+        "VOLUME_STATE_DRIFT"
+      ],
+      "default": "VOLUME_STATE_UNSPECIFIED"
+    },
+    "WipeVolumeBody": {
+      "type": "object",
+      "properties": {
+        "acknowledgeDataLoss": {
+          "type": "boolean"
+        },
+        "force": {
+          "type": "boolean"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        }
+      }
+    },
+    "WipeVolumeResponse": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -149,6 +149,21 @@ CGO_ENABLED=0 go build -trimpath -o bin/kouja-csi-node ./cmd/kouja-csi-node
 Protocol generation and CRD generation require the tools installed by
 `make tools`, followed by `make proto` and `make generate`.
 
+## Client SDK
+
+Generated gRPC stubs and the HTTP/JSON gateway live in `gen/kouja/v1`. The
+merged OpenAPI 2.0 document is generated at
+`gen/openapi/openapi.swagger.json`. The generated `gen/client` package wraps
+both transports with mTLS helpers and typed methods for every RPC:
+
+```go
+grpcClient, err := client.NewGRPCFromFiles(target, certFile, keyFile, caFile)
+httpClient, err := client.NewHTTPFromFiles("https://"+target, certFile, keyFile, caFile)
+```
+
+See [Client SDK](docs/clients.md) for complete examples, request-ID
+propagation, error handling, and regeneration instructions.
+
 ## Install the agent
 
 ### 1. Prepare the host
