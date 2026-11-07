@@ -122,7 +122,7 @@ use a new live registry. Neither restarts the whole storage service.
     `unexported` state. It does not delete the volume or target definition.
     A disabled iSCSI export remains visible in the volume table with an
     **Enable target** action that recreates the target from the stored
-    definition and rotates in a new credential.
+    definition with the same CHAP credential.
 *   Show up to 256 volumes and up to 64 problem operations. When the result is
     truncated, show the total counts and a visible truncation notice.
 *   Show running, failed, and `needs_attention` operations with action, owner,
@@ -487,7 +487,7 @@ change does not produce a reason. No other field sets `restart_required`.
 | `PUT` | `/api/classes/{name}` | `200` | `400`, `409`, `422`, `500` | Body `{"vg":"vg"}`. Sets a class mapping live and persists it. |
 | `DELETE` | `/api/classes/{name}` | `204` | `404`, `409`, `500` | Removes a class mapping live and persists it; `409` on config-lock conflict. |
 | `POST` | `/api/targets/disable` | `204` | `400`, `404`, `409`, `415`, `422`, `500`, `503` | Body `{"owner":"...","volume_id":"..."}`. Force-unexports only an iSCSI target, drops active sessions, and retains the SQLite volume/export definition. |
-| `POST` | `/api/targets/enable` | `204` | `400`, `404`, `409`, `415`, `422`, `500`, `503` | Body `{"owner":"...","volume_id":"..."}`. Recreates a disabled iSCSI target from its stored definition and creates a new credential if needed. |
+| `POST` | `/api/targets/enable` | `204` | `400`, `404`, `409`, `415`, `422`, `500`, `503` | Body `{"owner":"...","volume_id":"..."}`. Recreates a disabled iSCSI target from its stored definition and reuses the active credential. |
 | `GET` | `/api/certificates` | `200` | `500` | Lists regular `.crt`, `.key`, and `.pem` files in `admin_ui.client_cert_dir` and, separately, the public `listen.tls.client_ca_file` as `ca`. A missing/unsafe directory is reported in the body, not as a crash. |
 | `GET` | `/api/certificates/{name}` | `200` | `404`, `405` | Downloads one allowed file with `Content-Disposition: attachment`. Path traversal, symlinks, and non-allowlisted names are `404`. |
 | `GET` | `/api/ca` | `200` | `404`, `405` | Downloads `listen.tls.client_ca_file` (the public CA certificate only; the CA private key is never served). |
@@ -1060,11 +1060,11 @@ unexport intent.
 
 `POST /api/targets/enable` accepts the same owner and volume ID. It loads the
 stored iSCSI export definition and runs an export operation using the retained
-target, initiator, and portal fields. If the prior disable superseded the
-credential, the operation generates a new credential and installs it on the
-recreated target. The volume and export return to `exported` state. The action
-carries a unique request ID so disable/enable cycles do not replay an older
-operation.
+target, initiator, portal, and CHAP credential fields. The admin disable path
+sets `keep_credential`, so the active credential is not superseded; enable
+reinstalls the same credential on the recreated target. The volume and export
+return to `exported` state. The action carries a unique request ID so
+disable/enable cycles do not replay an older operation.
 
 ### Last known-good configuration
 
@@ -1375,7 +1375,7 @@ restarts.
 | Target disable with active sessions | Forced unexport; `204`; target/ACL removed, sessions dropped, volume/export rows retained. |
 | Target disable on a non-iSCSI export | `422` with `invalid_target`; no target or state change. |
 | Target disable on a missing definition | `404` with `not_found`; no target or state change. |
-| Target enable | Target recreated from the stored definition; `204`; the volume/export returns to exported state and a new credential is created if the old one was superseded. |
+| Target enable | Target recreated from the stored definition with the same CHAP credential; `204`; the volume/export returns to exported state. |
 | Target enable while already exported | Idempotent export reconciliation; `204` or a mapped conflict if the target cannot be recreated. |
 | Config changed, binding socket unchanged | `200`, `config_changed:true`, `restart_required:false`. |
 | Binding socket changed | `200`, `config_changed:true`, `restart_required:true`; operator restarts manually. |

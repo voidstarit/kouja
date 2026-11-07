@@ -14,9 +14,14 @@ func TestEnableTargetRecreatesExportAndCredential(t *testing.T) {
 	if _, err := manager.Run(context.Background(), create); err != nil {
 		t.Fatalf("create: %v", err)
 	}
+	before := activeCredential(t, store, create.Owner, "vol1")
 	exporter.observation.SessionState = target.SessionActive
 	if err := manager.DisableTarget(context.Background(), create.Owner, "vol1"); err != nil {
 		t.Fatalf("disable: %v", err)
+	}
+	afterDisable := activeCredential(t, store, create.Owner, "vol1")
+	if afterDisable.ID != before.ID || afterDisable.State != "active" {
+		t.Fatalf("disable changed credential: before=%#v after=%#v", before, afterDisable)
 	}
 	if err := manager.EnableTarget(context.Background(), create.Owner, "vol1"); err != nil {
 		t.Fatalf("enable: %v", err)
@@ -40,8 +45,8 @@ func TestEnableTargetRecreatesExportAndCredential(t *testing.T) {
 		t.Fatalf("export = %#v", export)
 	}
 	credential := activeCredential(t, store, create.Owner, "vol1")
-	if credential.State != "active" || credential.ID == "" {
-		t.Fatalf("credential = %#v", credential)
+	if credential.State != "active" || credential.ID != before.ID {
+		t.Fatalf("credential = %#v, before = %#v", credential, before)
 	}
 }
 
@@ -77,5 +82,9 @@ func TestDisableTargetForceUnexportsAndKeepsDefinition(t *testing.T) {
 	}
 	if export.State != "unexported" || export.TargetName == "" || export.Initiator == "" {
 		t.Fatalf("definition = %#v", export)
+	}
+	credential := activeCredential(t, store, create.Owner, "vol1")
+	if credential.State != "active" || credential.ID == "" {
+		t.Fatalf("credential = %#v", credential)
 	}
 }

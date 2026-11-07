@@ -58,7 +58,7 @@ func New(store *state.Store, lvmBackend lvm.Backend, iscsi, nvmet target.Exporte
 // re-export from being mistaken for the previous idempotent unexport.
 func (manager *Manager) DisableTarget(ctx context.Context, owner, volumeID string) error {
 	requestID := "admin-ui-disable-" + uuid.NewString()
-	intent, err := json.Marshal(UnexportIntent{Force: true, RequestID: requestID})
+	intent, err := json.Marshal(UnexportIntent{Force: true, KeepCredential: true, RequestID: requestID})
 	if err != nil {
 		return err
 	}

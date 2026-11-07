@@ -80,9 +80,12 @@ func (manager *Manager) runUnexport(ctx context.Context, request Request, reques
 		export.UpdatedAt = now
 		exportPointer = &export
 	}
-	credentialRecord, err := manager.supersedeCredential(ctx, volume)
-	if err != nil {
-		return manager.failOperation(ctx, operation, &volume, err, request.RequestID)
+	var credentialRecord *state.Credential
+	if !intent.KeepCredential {
+		credentialRecord, err = manager.supersedeCredential(ctx, volume)
+		if err != nil {
+			return manager.failOperation(ctx, operation, &volume, err, request.RequestID)
+		}
 	}
 	return manager.succeedOperation(ctx, operation, volume, exportPointer, credentialRecord, request.RequestID)
 }

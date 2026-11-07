@@ -36,6 +36,9 @@ type UnexportIntent struct {
 	// RequestID makes an explicit admin disable a distinct operation when the
 	// same volume is exported and disabled again later.
 	RequestID string `json:"request_id,omitempty"`
+	// KeepCredential preserves the active CHAP credential for a reversible
+	// admin disable. Normal unexport behavior supersedes it.
+	KeepCredential bool `json:"keep_credential,omitempty"`
 }
 
 type ResizeIntent struct {
