@@ -1,0 +1,16 @@
+openapi_options:
+  file:
+    - file: kouja/v1/common.proto
+      option:
+        info:
+          title: kouja API
+          description: >-
+            Per-host block storage agent API. All endpoints require a client
+            certificate trusted by the agent.
+          version: v1
+        schemes:
+          - HTTPS
+        consumes:
+          - application/json
+        produces:
+          - application/json

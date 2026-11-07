@@ -12,3 +12,14 @@ plugins:
     out: gen
     opt:
       - paths=source_relative
+  - name: openapiv2
+    out: gen/openapi
+    opt:
+      - allow_merge=true
+      - merge_file_name=openapi
+      - json_names_for_fields=true
+      - proto3_optional_nullable=true
+      - preserve_rpc_order=true
+      - openapi_naming_strategy=simple
+      - simple_operation_ids=true
+      - openapi_configuration=proto/openapi.yaml
