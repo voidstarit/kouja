@@ -956,6 +956,14 @@ The backup job requires `backup_target` to be a writable off-host mount path. It
 * **Cons**: a separate listener adds certificates, ports, and firewall rules. A local socket makes remote automation depend on SSH or a jump host.
 * **Reason for Rejection**: the admin service shares the listener and is authorized by an admin role in the client certificate. The volume and admin APIs are separate services and URL prefixes, but one mTLS endpoint.
 
+> **Superseded for the local admin UI (2026-11-06):** A separate,
+> disabled-by-default loopback listener now serves the local admin UI described
+> in [admin-ui.md](admin-ui.md). The mTLS admin service remains the
+> authenticated API for volume lifecycle and other administrative operations.
+> The loopback listener is limited to the local configuration/status UI and
+> live VG/class actions. This note does not change the rejection of a
+> network-exposed second admin API.
+
 ### Alternative O: CLI wrappers or `targetd`
 
 * **Pros**: `targetcli` and `nvmetcli` are existing tools, and `targetd` already manages LVM and LIO.
@@ -1004,7 +1012,7 @@ The backup job requires `backup_target` to be a writable off-host mount path. It
 * The CSI driver is part of the project and ships in stage 2, so the Kubernetes path has a supported client. It is a client of the same API, not a second control plane inside kouja.
 * SQLite is the only state store, with WAL, full synchronous writes, tested backups, and fail-closed behavior.
 * Mutations are synchronous and serialized per volume, with a per-VG lock around capacity and allocation.
-* The admin API shares the listener and uses an admin role in the certificate.
+* The admin API shares the mTLS listener and uses an admin role in the certificate. The separate loopback listener in [admin-ui.md](admin-ui.md) is limited to the local configuration/status UI and live VG/class actions, and is disabled by default.
 * The agent is written in Go and writes configfs directly.
 
 ## Risks & Mitigations

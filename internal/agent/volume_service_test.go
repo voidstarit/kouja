@@ -34,8 +34,9 @@ func (runner *fakeRunner) Run(_ context.Context, request operations.Request) (op
 }
 
 type fakeLVM struct {
-	capacity    lvm.Capacity
-	capacityErr error
+	capacity       lvm.Capacity
+	capacityErr    error
+	eligibilityErr error
 }
 
 func (backend *fakeLVM) Create(context.Context, string, string, int64, map[string]string) (lvm.LV, error) {
@@ -62,7 +63,7 @@ func (backend *fakeLVM) SetOwnerTag(context.Context, string, string, string) err
 func (backend *fakeLVM) Capacity(context.Context, string) (lvm.Capacity, error) {
 	return backend.capacity, backend.capacityErr
 }
-func (backend *fakeLVM) Eligibility(context.Context, string) error { return nil }
+func (backend *fakeLVM) Eligibility(context.Context, string) error { return backend.eligibilityErr }
 
 type fakeCredentialManager struct {
 	record credential.Credential

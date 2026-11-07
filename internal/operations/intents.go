@@ -26,10 +26,19 @@ type ExportIntent struct {
 	RotateCredential bool   `json:"rotate_credential,omitempty"`
 	Force            bool   `json:"force,omitempty"`
 	AttachmentID     string `json:"attachment_id,omitempty"`
+	// RequestID makes an explicit admin enable a distinct operation when the
+	// same target is disabled and enabled again later.
+	RequestID string `json:"request_id,omitempty"`
 }
 
 type UnexportIntent struct {
 	Force bool `json:"force"`
+	// RequestID makes an explicit admin disable a distinct operation when the
+	// same volume is exported and disabled again later.
+	RequestID string `json:"request_id,omitempty"`
+	// KeepCredential preserves the active CHAP credential for a reversible
+	// admin disable. Normal unexport behavior supersedes it.
+	KeepCredential bool `json:"keep_credential,omitempty"`
 }
 
 type ResizeIntent struct {

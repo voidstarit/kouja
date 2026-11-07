@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,12 +28,15 @@ type DriftRetrier interface {
 
 type AdminService struct {
 	koujav1.UnimplementedAdminServiceServer
-	store     *state.Store
-	lvm       lvm.Backend
-	exporters map[string]target.Exporter
-	creds     credential.Manager
-	retrier   DriftRetrier
-	classes   map[string]string
+	store         *state.Store
+	lvm           lvm.Backend
+	exporters     map[string]target.Exporter
+	creds         credential.Manager
+	retrier       DriftRetrier
+	classes       map[string]string
+	classRegistry ClassRegistry
+	vgs           VGService
+	vgClassGate   *sync.Mutex
 }
 
 type AdminOption func(*AdminService)
@@ -61,10 +65,39 @@ func WithStorageClasses(classes map[string]string) AdminOption {
 	}
 }
 
+func WithClassRegistry(registry ClassRegistry) AdminOption {
+	return func(service *AdminService) {
+		service.classRegistry = registry
+	}
+}
+
+func WithVGService(vgs VGService) AdminOption {
+	return func(service *AdminService) {
+		service.vgs = vgs
+	}
+}
+
+func WithVGClassGate(gate *sync.Mutex) AdminOption {
+	return func(service *AdminService) {
+		if gate != nil {
+			service.vgClassGate = gate
+		}
+	}
+}
+
 func NewAdminService(store *state.Store, lvmBackend lvm.Backend, options ...AdminOption) *AdminService {
-	service := &AdminService{store: store, lvm: lvmBackend, exporters: make(map[string]target.Exporter)}
+	service := &AdminService{
+		store: store, lvm: lvmBackend, exporters: make(map[string]target.Exporter),
+		vgClassGate: &sync.Mutex{},
+	}
 	for _, option := range options {
 		option(service)
+	}
+	if service.vgs == nil {
+		service.vgs = NewVGManager(store, lvmBackend, service.classRegistry)
+	}
+	if service.vgClassGate == nil {
+		service.vgClassGate = &sync.Mutex{}
 	}
 	return service
 }
@@ -76,24 +109,12 @@ func (service *AdminService) RegisterVG(ctx context.Context, request *koujav1.Re
 	if !vgNamePattern.MatchString(request.GetVgName()) {
 		return nil, status.Error(codes.InvalidArgument, "invalid vg_name")
 	}
-	if err := service.lvm.Eligibility(ctx, request.GetVgName()); err != nil {
-		return nil, statusError(err)
+	if service.vgs == nil {
+		return nil, status.Error(codes.FailedPrecondition, "volume group service is not configured")
 	}
-	capacity, err := service.lvm.Capacity(ctx, request.GetVgName())
+	capacity, err := service.vgs.Register(ctx, request.GetVgName(), request.GetVgUuid(), true)
 	if err != nil {
-		return nil, statusError(err)
-	}
-	if request.GetVgUuid() != "" && request.GetVgUuid() != capacity.VGUUID {
-		return nil, status.Error(codes.FailedPrecondition, "vg_uuid does not match the observed volume group")
-	}
-	now := time.Now().UTC()
-	if err := service.store.Transact(ctx, func(tx state.Tx) error {
-		return tx.PutVG(state.VG{
-			Name: request.GetVgName(), UUID: capacity.VGUUID, State: "active",
-			RegisteredAt: now, UpdatedAt: now,
-		})
-	}); err != nil {
-		return nil, statusError(err)
+		return nil, vgStatusError(err)
 	}
 	return &koujav1.RegisterVGResponse{
 		Capacity: service.capacityProto(capacity), RequestId: requestID(ctx, request.GetRequestId()),
@@ -107,13 +128,13 @@ func (service *AdminService) DeregisterVG(ctx context.Context, request *koujav1.
 	if request.GetVgName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "vg_name is required")
 	}
-	if err := service.store.Transact(ctx, func(tx state.Tx) error {
-		return tx.DeleteVG(request.GetVgName())
-	}); err != nil {
-		if errors.Is(err, state.ErrConflict) {
-			return nil, status.Error(codes.FailedPrecondition, "volume group still has volumes")
-		}
-		return nil, statusError(err)
+	if service.vgs == nil {
+		return nil, status.Error(codes.FailedPrecondition, "volume group service is not configured")
+	}
+	service.vgClassGate.Lock()
+	defer service.vgClassGate.Unlock()
+	if err := service.vgs.Deregister(ctx, request.GetVgName()); err != nil {
+		return nil, vgStatusError(err)
 	}
 	return &koujav1.DeregisterVGResponse{RequestId: requestID(ctx, request.GetRequestId())}, nil
 }
@@ -123,7 +144,13 @@ func (service *AdminService) ListVGs(ctx context.Context, _ *koujav1.ListVGsRequ
 		return nil, statusError(err)
 	}
 	var vgs []state.VG
-	if err := service.store.Transact(ctx, func(tx state.Tx) error {
+	if service.vgs != nil {
+		values, err := service.vgs.List(ctx)
+		if err != nil {
+			return nil, vgStatusError(err)
+		}
+		vgs = values
+	} else if err := service.store.Transact(ctx, func(tx state.Tx) error {
 		values, err := tx.ListVGs()
 		vgs = values
 		return err
@@ -136,13 +163,34 @@ func (service *AdminService) ListVGs(ctx context.Context, _ *koujav1.ListVGsRequ
 		if err != nil {
 			response.Vgs = append(response.Vgs, &koujav1.Capacity{
 				VgName: vg.Name, VgUuid: vg.UUID, VgState: "unavailable",
-				StorageClass: storageClassForVG(service.classes, vg.Name),
+				StorageClass: service.storageClass(vg.Name),
 			})
 			continue
 		}
 		response.Vgs = append(response.Vgs, service.capacityProto(capacity))
 	}
 	return response, nil
+}
+
+func (service *AdminService) storageClass(vg string) string {
+	if service.classRegistry != nil {
+		return service.classRegistry.ClassName(vg)
+	}
+	return storageClassForVG(service.classes, vg)
+}
+
+func vgStatusError(err error) error {
+	switch {
+	case errors.Is(err, ErrVGUUIDMismatch), errors.Is(err, ErrVGUnavailable),
+		errors.Is(err, ErrVGInUse), errors.Is(err, ErrVGClassMapped):
+		return status.Error(codes.FailedPrecondition, err.Error())
+	case errors.Is(err, ErrVGNotFound):
+		return status.Error(codes.NotFound, err.Error())
+	case errors.Is(err, ErrVGConflict):
+		return status.Error(codes.AlreadyExists, err.Error())
+	default:
+		return statusError(err)
+	}
 }
 
 func (service *AdminService) GrantCredential(ctx context.Context, request *koujav1.GrantCredentialRequest) (*koujav1.GrantCredentialResponse, error) {
@@ -485,13 +533,13 @@ func (service *AdminService) updateDrift(ctx context.Context, volume state.Volum
 
 func (service *AdminService) volumeProto(volume state.Volume) *koujav1.Volume {
 	proto := toProtoVolume(volume)
-	proto.StorageClass = storageClassForVG(service.classes, volume.VGName)
+	proto.StorageClass = service.storageClass(volume.VGName)
 	return proto
 }
 
 func (service *AdminService) capacityProto(capacity lvm.Capacity) *koujav1.Capacity {
 	proto := toProtoCapacity(capacity)
-	proto.StorageClass = storageClassForVG(service.classes, capacity.VGName)
+	proto.StorageClass = service.storageClass(capacity.VGName)
 	return proto
 }
 

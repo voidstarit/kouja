@@ -40,7 +40,11 @@ type ServiceOptions struct {
 	Ready        func() bool
 	Admission    *Admission
 	// StorageClasses maps a stable class name to an LVM volume group.
+	// Deprecated: use Classes for live mappings. It remains as a fallback for
+	// tests and callers that only need a static map.
 	StorageClasses map[string]string
+	// Classes is the live storage-class registry shared with the admin UI.
+	Classes ClassRegistry
 }
 
 type VolumeService struct {
@@ -54,6 +58,20 @@ type VolumeService struct {
 
 func NewVolumeService(store *state.Store, lvmBackend lvm.Backend, runner OperationRunner, creds credential.Manager, options ServiceOptions) *VolumeService {
 	return &VolumeService{store: store, lvm: lvmBackend, runner: runner, creds: creds, options: options}
+}
+
+func (service *VolumeService) resolveClass(class, vg string) (string, string, error) {
+	if service.options.Classes != nil {
+		return service.options.Classes.Resolve(class, vg)
+	}
+	return resolveStorageClass(service.options.StorageClasses, class, vg)
+}
+
+func (service *VolumeService) storageClass(vg string) string {
+	if service.options.Classes != nil {
+		return service.options.Classes.ClassName(vg)
+	}
+	return storageClassForVG(service.options.StorageClasses, vg)
 }
 
 func (service *VolumeService) CreateVolume(ctx context.Context, request *koujav1.CreateVolumeRequest) (*koujav1.CreateVolumeResponse, error) {
@@ -72,7 +90,7 @@ func (service *VolumeService) CreateVolume(ctx context.Context, request *koujav1
 	if request.GetVolumeId() == "" || request.GetSizeBytes() <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "volume_id and positive size_bytes are required")
 	}
-	_, vg, resolveErr := resolveStorageClass(service.options.StorageClasses, request.GetStorageClass(), request.GetVg())
+	_, vg, resolveErr := service.resolveClass(request.GetStorageClass(), request.GetVg())
 	if resolveErr != nil {
 		return nil, status.Error(codes.InvalidArgument, resolveErr.Error())
 	}
@@ -448,7 +466,7 @@ func (service *VolumeService) GetCapacity(ctx context.Context, _ *koujav1.GetCap
 		if err != nil {
 			response.Vgs = append(response.Vgs, &koujav1.Capacity{
 				VgName: vg.Name, VgUuid: vg.UUID, VgState: "unavailable",
-				StorageClass: storageClassForVG(service.options.StorageClasses, vg.Name),
+				StorageClass: service.storageClass(vg.Name),
 			})
 			continue
 		}
@@ -635,13 +653,13 @@ func protocolProto(protocol credential.Protocol) koujav1.Protocol {
 
 func (service *VolumeService) volumeProto(volume state.Volume) *koujav1.Volume {
 	proto := toProtoVolume(volume)
-	proto.StorageClass = storageClassForVG(service.options.StorageClasses, volume.VGName)
+	proto.StorageClass = service.storageClass(volume.VGName)
 	return proto
 }
 
 func (service *VolumeService) capacityProto(capacity lvm.Capacity) *koujav1.Capacity {
 	proto := toProtoCapacity(capacity)
-	proto.StorageClass = storageClassForVG(service.options.StorageClasses, capacity.VGName)
+	proto.StorageClass = service.storageClass(capacity.VGName)
 	return proto
 }
 

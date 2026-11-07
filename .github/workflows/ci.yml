@@ -27,8 +27,21 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
       - name: Run unit tests
         run: go test -tags=unit ./...
+
+      - name: Build UI, Go packages, and release binaries
+        run: make all
+
+      - name: Verify Node-free fallback build
+        run: make build-go
 
       - name: Run Ginkgo BDD specs
         run: make test-bdd

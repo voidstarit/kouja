@@ -247,6 +247,8 @@ type Tx interface {
 	GetVolume(owner, volumeID string) (Volume, error)
 	GetVolumeByResourceUUID(resourceUUID string) (Volume, error)
 	ListVolumes(owner string, page Page) ([]Volume, error)
+	ListVolumeStatuses(limit int) ([]VolumeStatus, error)
+	VolumeStateCounts() (map[string]int, error)
 	PutVolume(Volume) error
 	DeleteVolume(owner, volumeID string) error
 
@@ -275,6 +277,8 @@ type Tx interface {
 	GetOperationByID(id string) (Operation, error)
 	ListOperations(owner, volumeID string) ([]Operation, error)
 	ListRunningOperations() ([]Operation, error)
+	ListRecentOperations(limit int) ([]Operation, error)
+	OperationCount() (int, error)
 	PutOperation(Operation) error
 
 	PutGrant(Grant) error

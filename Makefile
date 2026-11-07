@@ -1,14 +1,40 @@
 GO ?= go
 BUF ?= buf
+NPM ?= npm
+UI_DIR ?= web
+BIN_DIR ?= bin
 CONTROLLER_GEN ?= controller-gen
 COVERAGE_OUT ?= coverage.out
 
-.PHONY: all build test test-bdd lint proto generate tools integration e2e fault perf upgrade coverage coverage-check csi-sanity phase0
+.PHONY: all binaries build build-go ui clean-assets test test-bdd lint proto generate tools integration e2e fault perf upgrade coverage coverage-check csi-sanity phase0
 
-all: build
+# Release layout: build the embedded UI and all command binaries in bin/.
+all: binaries
 
-build:
+binaries: build
+	mkdir -p $(BIN_DIR)
+	CGO_ENABLED=0 $(GO) build -trimpath -o $(BIN_DIR)/kouja-agent ./cmd/kouja-agent
+	CGO_ENABLED=0 $(GO) build -trimpath -o $(BIN_DIR)/kouja-csi-controller ./cmd/kouja-csi-controller
+	CGO_ENABLED=0 $(GO) build -trimpath -o $(BIN_DIR)/kouja-csi-node ./cmd/kouja-csi-node
+	install -m 0644 deploy/config.example.yaml $(BIN_DIR)/config.example.yaml
+	install -m 0755 deploy/kouja-init.sh $(BIN_DIR)/kouja-init.sh
+
+build: ui
 	$(GO) build ./...
+
+# Node-free build. Clean generated assets first so a previous full build does
+# not accidentally embed the browser bundle.
+build-go: clean-assets
+	$(GO) build ./...
+
+ui: clean-assets
+	cd $(UI_DIR) && $(NPM) ci
+	cd $(UI_DIR) && $(NPM) run build
+	test -f internal/adminui/assets/index.html
+
+clean-assets:
+	find internal/adminui/assets -mindepth 1 -maxdepth 1 \
+		! -name .gitkeep ! -name .gitignore -exec rm -rf {} +
 
 test:
 	$(GO) test -tags=unit ./...
@@ -17,6 +43,7 @@ test-bdd:
 	$(GO) test -v ./test/bdd
 
 lint:
+	bash -n deploy/kouja-init.sh deploy/install/install.sh
 	$(GO) vet ./...
 	golangci-lint run
 
