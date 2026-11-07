@@ -15,7 +15,8 @@ import (
 // ISCSI implements the target.Exporter interface directly against LIO
 // configfs. One target and TPG are used per volume.
 type ISCSI struct {
-	fs FileSystem
+	fs         FileSystem
+	procNetDir string
 }
 
 var _ Exporter = (*ISCSI)(nil)
@@ -24,7 +25,7 @@ func NewISCSI(fs FileSystem) *ISCSI {
 	if fs == nil {
 		fs = NewConfigFS("")
 	}
-	return &ISCSI{fs: fs}
+	return &ISCSI{fs: fs, procNetDir: "/proc/net"}
 }
 
 func (adapter *ISCSI) Export(ctx context.Context, spec ExportSpec, credential Credential) (ExportResult, error) {

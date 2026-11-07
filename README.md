@@ -46,6 +46,7 @@ serialized per volume and per volume group.
 | Recovery | Startup and periodic reconciliation, drift reporting, and admin actions. |
 | Kubernetes | CSI controller and node plugin for provisioning, attach/detach, mount, expansion, and cleanup. |
 | Observability | `/healthz`, `/readyz`, Prometheus metrics, structured logs, and audit rows. |
+| Local admin UI | Optional loopback-only configuration and status page; no authentication, disabled by default. |
 
 Not supported by v1: thin provisioning, snapshots, clones, replication,
 multi-initiator/RWX volumes, automatic high availability, or encryption of data
@@ -120,7 +121,9 @@ Go 1.26 or newer is required.
 git clone https://github.com/voidstarit/kouja.git
 cd kouja
 
-make build              # compile all packages
+make all                # build the embedded UI, binaries, bin/kouja-init.sh, and bin/config.example.yaml (Node 22.12)
+make build              # build the Preact UI, then all Go packages (Node 22.12)
+make build-go           # Go-only build with the fallback admin page, no Node
 make test               # unit tests
 make test-bdd           # Ginkgo/Gomega BDD suite
 make coverage-check     # enforce >= 80% coverage under ./internal
@@ -165,6 +168,56 @@ See [Client SDK](docs/clients.md) for complete examples, request-ID
 propagation, and regeneration instructions. Error reasons and retryability are
 documented in [Client Errors and Retries](docs/client-errors.md).
 
+## Local admin UI
+
+The optional admin UI is embedded in `kouja-agent` and is disabled by default.
+Enable it only on a single-administrator host:
+
+```yaml
+admin_ui:
+  enabled: true
+  address: 127.0.0.1:9444
+  client_cert_dir: /etc/kouja/tls/clients
+```
+
+Restart the agent once, then open `http://127.0.0.1:9444`. The listener is
+loopback-only and has **no authentication**. Any local process that can reach
+it can rewrite the root-owned configuration and change live VG/class mappings;
+this is a root-equivalent trust boundary. Do not proxy or port-forward it, and
+do not use it on a host with untrusted local users or host-network containers.
+The accepted deployment precondition is a single-administrator host with no
+SSRF-capable local service.
+
+The UI shows per-volume state, serving status, sessions, observations, VGs,
+iSCSI enablement/IQN/portals, the TLS server certificate’s DNS/IP subject
+alternative names, client certificate files, and problem operations. It also
+shows live iSCSI traffic from LIO configfs: cumulative read/write bytes,
+commands, session RX/TX, sampled read/write/command rates, LUN status, and
+login/session/abort/reset error counters. It also shows established client
+IP/port connections, matched to the target and initiator where the session
+endpoint is unambiguous. These counters are best-effort and never block the
+status view.
+It can edit the full YAML file with validation and atomic writes, and it can
+register/deregister VGs and add/remove class mappings live through the same VG
+logic as the mTLS admin API. It never restarts the service. A binding-socket
+change sets `restart_required`; restart manually with
+`systemctl restart kouja-agent`. Other startup-bound changes produce warnings.
+
+Client certificates are listed from `admin_ui.client_cert_dir` (default:
+`<tls cert directory>/clients`). Only regular `.crt`, `.key`, and `.pem` files
+directly inside that directory are downloadable; symlinks, the CA key, and the
+server private key are never exposed. The public client CA
+(`listen.tls.client_ca_file`) is available from
+**Configuration → Client certificates → Download client CA** or directly at
+`GET /api/ca`. The list includes client private keys, so keep that directory
+root-owned at `0700` and treat downloads as sensitive.
+`.bak` is the immediate pre-save copy; `.last-good` is the startup
+configuration that last reached readiness. Live class changes may need to be
+reapplied after a failed-start recovery.
+
+`make build` requires Node 22.12 and builds the embedded UI. `make build-go`
+builds without Node and serves the fallback page from `internal/adminui`.
+
 ## Install the agent
 
 ### 1. Prepare the host
@@ -191,9 +244,30 @@ Make sure `/etc/tlshd.conf` includes the `.nvme` keyring:
 keyrings=.nvme
 ```
 
-### 2. Install TLS material
+### 2. Initialize TLS and configuration
 
-The agent serves TLS 1.3 mTLS. Install the files before running the installer:
+The fastest path on a fresh host is the interactive initializer shipped with
+the release binaries:
+
+```sh
+sudo ./bin/kouja-init.sh
+# or, from a checkout:
+sudo ./deploy/kouja-init.sh
+```
+
+It requires `openssl` and walks through the configuration step by step, then:
+
+- generates a local test CA, server certificate, and `client-ca.crt`;
+- generates an admin client certificate and a caller client certificate by
+  default, with optional controller and node client certificates;
+- writes the certificate files under `/etc/kouja/tls` with private keys at
+  `0600` and the TLS directory at `0700`;
+- validates the generated YAML with `kouja-agent --check-config`;
+- backs up any existing config and installs `/etc/kouja/config.yaml` at `0600`.
+
+The generated CA is a convenience for a self-contained host. For production,
+prefer your operator PKI and choose the “use existing certificate files” path,
+or install the files manually:
 
 ```text
 /etc/kouja/tls/server.crt       # server certificate
@@ -201,13 +275,34 @@ The agent serves TLS 1.3 mTLS. Install the files before running the installer:
 /etc/kouja/tls/client-ca.crt    # CA used to verify API client certificates
 ```
 
-The directory should be `0700` root-owned and the files `0600`. Client
-certificate URI SANs determine roles:
+The server certificate must include the DNS names and IP addresses clients use
+to reach the agent. Client certificate URI SANs determine roles:
 
 - `spiffe://kouja/admin/<name>` — administrator
 - `spiffe://kouja/caller/<name>` — volume caller
 - `spiffe://kouja/controller/<name>` — CSI controller
 - `spiffe://kouja/node/<name>` — CSI node
+
+You can validate any configuration, including one written by hand, without
+starting the agent:
+
+```sh
+bin/kouja-agent --config /etc/kouja/config.yaml --check-config
+```
+
+The generated CA certificate is public and can be copied to clients manually:
+
+```sh
+sudo cat /etc/kouja/tls/client-ca.crt
+# or
+scp root@storage-host:/etc/kouja/tls/client-ca.crt .
+```
+
+When the admin UI is enabled, use **Configuration → Client certificates →
+Download client CA**. The CA private key (`ca.key`) is never served by the UI.
+
+`make all` places the initializer, the release binaries, and
+`bin/config.example.yaml` in `bin/`.
 
 ### 3. Run the installer
 
@@ -226,8 +321,9 @@ The installer:
 - disables the legacy `target.service`;
 - enables and starts `kouja-agent.service`.
 
-The installer does **not** create certificates or register volume groups. Edit
-the configuration and restart:
+The installer itself does **not** create certificates or register volume
+groups; `kouja-init.sh` is the separate interactive helper for that. If you
+install first, run the initializer afterward and restart:
 
 ```sh
 sudoedit /etc/kouja/config.yaml

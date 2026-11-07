@@ -9,10 +9,12 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/voidstarit/kouja/internal/adminui"
 	"github.com/voidstarit/kouja/internal/agent"
 	"github.com/voidstarit/kouja/internal/backup"
 	"github.com/voidstarit/kouja/internal/config"
@@ -40,11 +42,16 @@ func main() {
 
 func run() error {
 	configPath := flag.String("config", "/etc/kouja/config.yaml", "path to the agent configuration")
+	checkConfig := flag.Bool("check-config", false, "validate the configuration and exit")
 	flag.Parse()
 
-	cfg, err := config.Load(*configPath)
+	cfg, configData, err := config.LoadWithData(*configPath)
 	if err != nil {
 		return err
+	}
+	if *checkConfig {
+		_, _ = fmt.Fprintln(os.Stdout, "configuration valid")
+		return nil
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
@@ -92,6 +99,9 @@ func run() error {
 	if err := agent.InitializeVGs(context.Background(), store, lvmBackend, cfg.EffectiveVGs()); err != nil {
 		return err
 	}
+	vgClassGate := &sync.Mutex{}
+	classMap := agent.NewClassMap(cfg.Storage.Classes, *configPath)
+	vgManager := agent.NewVGManager(store, lvmBackend, classMap)
 
 	stepTimeouts := make(map[operations.Action]time.Duration)
 	for action, seconds := range cfg.Operations.StepTimeoutSecs {
@@ -124,17 +134,34 @@ func run() error {
 		Ready:          ready.Load,
 		Admission:      admission,
 		StorageClasses: cfg.Storage.Classes,
+		Classes:        classMap,
 	})
 	adminService := agent.NewAdminService(store, lvmBackend,
 		agent.WithTargetExporters(map[string]target.Exporter{"iscsi": iscsi, "nvme-tcp": nvme}),
 		agent.WithCredentialManager(credentials),
 		agent.WithDriftRetrier(manager),
 		agent.WithStorageClasses(cfg.Storage.Classes),
+		agent.WithClassRegistry(classMap),
+		agent.WithVGService(vgManager),
+		agent.WithVGClassGate(vgClassGate),
 	)
 	server, err := agent.NewServer(cfg, volumeService, adminService,
 		agent.WithReadiness(ready.Load), agent.WithMetrics(metrics))
 	if err != nil {
 		return err
+	}
+	metrics.Set("kouja_admin_ui_up", 0)
+	adminServer := startAdminServer(cfg, adminui.Options{
+		ConfigPath: *configPath, Config: cfg, ConfigData: configData,
+		Store: store, Capacity: lvmBackend, VGs: vgManager, Classes: classMap,
+		Ready: ready.Load, HostUUID: hostUUID, AgentVersion: agentVersion,
+		APIVersion: apiVersion, StartedAt: time.Now(), Logger: logger, Metrics: metrics,
+		TargetMetrics: iscsi,
+		VGClassGate:   vgClassGate,
+	})
+	if adminServer != nil {
+		logger.Warn("local admin UI enabled without authentication; any local process is root-equivalent",
+			"address", cfg.AdminUI.Address)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -150,18 +177,40 @@ func run() error {
 		reconciler.Run(ctx)
 	}()
 	ready.Store(true)
+	if adminServer != nil {
+		if err := adminServer.MarkRunning(); err != nil {
+			logger.Error("write last-good configuration", "error", err)
+		}
+		go func() {
+			if err := adminServer.Serve(); err != nil {
+				logger.Error("admin UI server stopped", "error", err)
+				shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				_ = adminServer.Shutdown(shutdownCtx)
+				cancel()
+			}
+		}()
+	}
 	logger.Info("agent listening", "address", cfg.Listen.Address, "host_uuid", hostUUID)
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve() }()
+	shutdownAdmin := func() {
+		if adminServer != nil {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = adminServer.Shutdown(shutdownCtx)
+			cancel()
+		}
+	}
 
 	select {
 	case <-ctx.Done():
+		shutdownAdmin()
 		server.GracefulStop()
 		<-reconcileDone
 		<-backupDone
 		return nil
 	case err := <-serveErr:
 		ready.Store(false)
+		shutdownAdmin()
 		server.Stop()
 		<-reconcileDone
 		<-backupDone
@@ -170,6 +219,18 @@ func run() error {
 		}
 		return nil
 	}
+}
+
+func startAdminServer(cfg *config.Config, options adminui.Options) *adminui.Server {
+	if cfg == nil || !cfg.AdminUI.Enabled {
+		return nil
+	}
+	server, err := adminui.New(options)
+	if err != nil {
+		slog.Error("admin UI listener failed; continuing without it", "error", err)
+		return nil
+	}
+	return server
 }
 
 func acquireLock(path string) (*os.File, error) {

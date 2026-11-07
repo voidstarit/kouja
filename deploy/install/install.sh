@@ -32,6 +32,10 @@ listen:
     key_file: /etc/kouja/tls/server.key
     client_ca_file: /etc/kouja/tls/client-ca.crt
     min_version: TLS1.3
+admin_ui:
+  enabled: false
+  address: 127.0.0.1:9444
+  client_cert_dir: /etc/kouja/tls/clients
 storage:
   headroom_percent: 5
   headroom_min_bytes: 1073741824
@@ -78,6 +82,10 @@ systemctl enable --now kouja-agent.service
 cat <<'EOF'
 kouja is installed.
 Firewall ports: 9443/tcp control, 3260/tcp iSCSI, 4420/tcp NVMe-oF.
+The optional admin_ui listener is disabled. If enabled, it is loopback-only
+and has no authentication; any local process that can reach it is
+root-equivalent. Do not proxy or port-forward it and use it only on a
+single-administrator host.
 Uninstall: systemctl disable --now kouja-agent; rm -f /etc/systemd/system/kouja-agent.service /etc/tmpfiles.d/kouja-agent.conf /usr/local/bin/kouja-agent.
 Data volumes are not deleted by uninstall.
 EOF

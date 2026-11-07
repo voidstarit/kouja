@@ -1,5 +1,7 @@
 package config
 
+import "testing"
+
 import (
 	"strings"
 
@@ -38,3 +40,15 @@ var _ = Describe("storage classes", func() {
 		gomega.Expect(err).To(gomega.MatchError(gomega.ContainSubstring("invalid storage.classes name")))
 	})
 })
+
+func TestStorageClassForVGFallback(t *testing.T) {
+	if got := StorageClassForVG(nil, "vg1"); got != "vg1" {
+		t.Fatalf("nil fallback = %q", got)
+	}
+	if got := StorageClassForVG(map[string]string{"ssd": "vg1"}, "vg1"); got != "ssd" {
+		t.Fatalf("mapped = %q", got)
+	}
+	if got := StorageClassForVG(map[string]string{"ssd": "vg1"}, "vg2"); got != "vg2" {
+		t.Fatalf("unmapped = %q", got)
+	}
+}

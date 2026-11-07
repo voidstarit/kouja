@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -22,11 +23,19 @@ type Config struct {
 	SecretKeyFile string           `yaml:"secret_key_file"`
 	EmergencyLog  string           `yaml:"emergency_log"`
 	Listen        ListenConfig     `yaml:"listen"`
+	AdminUI       AdminUIConfig    `yaml:"admin_ui"`
 	Storage       StorageConfig    `yaml:"storage"`
 	Targets       TargetsConfig    `yaml:"targets"`
 	Operations    OperationsConfig `yaml:"operations"`
 	Admission     AdmissionConfig  `yaml:"admission"`
 	State         StateConfig      `yaml:"state"`
+}
+
+// AdminUIConfig configures the optional loopback-only local administration UI.
+type AdminUIConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	Address       string `yaml:"address"`
+	ClientCertDir string `yaml:"client_cert_dir"`
 }
 
 type ListenConfig struct {
@@ -146,6 +155,10 @@ func Default() Config {
 				MinVersion:   "TLS1.3",
 			},
 		},
+		AdminUI: AdminUIConfig{
+			Enabled: false,
+			Address: "127.0.0.1:9444",
+		},
 		Storage: StorageConfig{
 			HeadroomPercent:    5,
 			HeadroomMinBytes:   1 << 30,
@@ -195,14 +208,25 @@ func Default() Config {
 }
 
 func Load(path string) (*Config, error) {
+	cfg, _, err := LoadWithData(path)
+	return cfg, err
+}
+
+// LoadWithData loads and parses the configuration and returns the exact bytes
+// that were read. The raw bytes are used for the admin UI recovery file.
+func LoadWithData(path string) (*Config, []byte, error) {
 	if strings.TrimSpace(path) == "" {
-		return nil, fmt.Errorf("%w: empty configuration path", ErrInvalid)
+		return nil, nil, fmt.Errorf("%w: empty configuration path", ErrInvalid)
 	}
 	data, err := os.ReadFile(path) //nolint:gosec // path is the operator-supplied configuration file
 	if err != nil {
-		return nil, fmt.Errorf("config: read %q: %w", path, err)
+		return nil, nil, fmt.Errorf("config: read %q: %w", path, err)
 	}
-	return Parse(data)
+	cfg, err := Parse(data)
+	if err != nil {
+		return nil, nil, err
+	}
+	return cfg, data, nil
 }
 
 func Parse(data []byte) (*Config, error) {
@@ -221,6 +245,12 @@ func Parse(data []byte) (*Config, error) {
 
 func (cfg *Config) applyDefaults() {
 	defaults := Default()
+	if cfg.AdminUI.Address == "" {
+		cfg.AdminUI.Address = defaults.AdminUI.Address
+	}
+	if cfg.AdminUI.ClientCertDir == "" {
+		cfg.AdminUI.ClientCertDir = filepath.Join(filepath.Dir(cfg.Listen.TLS.CertFile), "clients")
+	}
 	for _, action := range []string{"create", "export", "delete", "resize"} {
 		if cfg.Operations.StepTimeoutSecs == nil {
 			cfg.Operations.StepTimeoutSecs = make(map[string]int)
@@ -252,6 +282,14 @@ func (cfg *Config) Validate() error {
 	}
 	if err := validateHostPort("listen.address", cfg.Listen.Address); err != nil {
 		return err
+	}
+	if err := validateAdminUIAddress(cfg.AdminUI.Address); err != nil {
+		return err
+	}
+	if cfg.AdminUI.ClientCertDir != "" {
+		if err := requireAbsolute("admin_ui.client_cert_dir", cfg.AdminUI.ClientCertDir); err != nil {
+			return err
+		}
 	}
 	if cfg.Storage.HeadroomPercent < 0 || cfg.Storage.HeadroomPercent > 100 {
 		return fmt.Errorf("%w: storage.headroom_percent must be between 0 and 100", ErrInvalid)
@@ -342,6 +380,18 @@ func validateHostPort(kind, address string) error {
 	port, err := net.LookupPort("tcp", portText)
 	if err != nil || port < 1 || port > 65535 {
 		return fmt.Errorf("%w: %s has invalid port", ErrInvalid, kind)
+	}
+	return nil
+}
+
+func validateAdminUIAddress(address string) error {
+	host, portText, err := net.SplitHostPort(address)
+	if err != nil || (host != "127.0.0.1" && host != "::1") {
+		return fmt.Errorf("%w: admin_ui.address must be a loopback IP literal:port", ErrInvalid)
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil || port < 1 || port > 65535 {
+		return fmt.Errorf("%w: admin_ui.address has invalid port", ErrInvalid)
 	}
 	return nil
 }

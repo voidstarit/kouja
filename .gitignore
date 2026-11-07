@@ -6,3 +6,6 @@ coverage.out
 .idea/
 .vscode/
 .DS_Store
+web/node_modules/
+web/dist/
+web/.vite/
