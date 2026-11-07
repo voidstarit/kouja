@@ -8,7 +8,7 @@ import (
 )
 
 func bddTestOpenAPISpec(t testing.TB) {
-	payload, err := os.ReadFile("../gen/openapi/openapi.swagger.json")
+	payload, err := os.ReadFile("../openapi/openapi.swagger.json")
 	if err != nil {
 		t.Fatalf("read OpenAPI spec: %v", err)
 	}

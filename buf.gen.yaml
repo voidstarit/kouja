@@ -12,6 +12,8 @@ plugins:
     out: gen
     opt:
       - paths=source_relative
+  - name: kouja-client
+    out: gen
   - name: openapiv2
     out: gen/openapi
     opt:

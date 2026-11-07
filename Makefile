@@ -35,6 +35,7 @@ tools:
 	$(GO) install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
 	$(GO) install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.24.0
 	$(GO) install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.24.0
+	$(GO) install ./hack/protoc-gen-kouja-client
 	$(GO) install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.5
 	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 

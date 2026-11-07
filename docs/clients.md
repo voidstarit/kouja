@@ -7,10 +7,13 @@ The repository ships a Go client for both agent transports:
 | gRPC stubs and clients | `gen/kouja/v1/*.pb.go`, `*_grpc.pb.go` | `buf generate` |
 | HTTP/JSON gateway | `gen/kouja/v1/*.pb.gw.go` | `buf generate` |
 | OpenAPI 2.0 document | `gen/openapi/openapi.swagger.json` | `buf generate` |
-| Typed gRPC and HTTP wrappers | `client/` | Hand maintained |
+| Typed gRPC and HTTP wrappers | `gen/client/client.gen.go` | `buf generate` |
 
 The wrappers use the same protobuf request and response messages as the
 generated stubs, so callers can switch transports without converting models.
+The `protoc-gen-kouja-client` generator lives in
+`hack/protoc-gen-kouja-client`; `make tools` installs it and `make proto`
+regenerates `gen/client/client.gen.go` from the `google.api.http` annotations.
 
 ## gRPC
 
@@ -21,7 +24,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/voidstarit/kouja/client"
+	"github.com/voidstarit/kouja/gen/client"
 	koujav1 "github.com/voidstarit/kouja/gen/kouja/v1"
 )
 
@@ -60,7 +63,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/voidstarit/kouja/client"
+	"github.com/voidstarit/kouja/gen/client"
 	koujav1 "github.com/voidstarit/kouja/gen/kouja/v1"
 	"google.golang.org/protobuf/proto"
 )

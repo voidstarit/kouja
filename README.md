@@ -153,8 +153,8 @@ Protocol generation and CRD generation require the tools installed by
 
 Generated gRPC stubs and the HTTP/JSON gateway live in `gen/kouja/v1`. The
 merged OpenAPI 2.0 document is generated at
-`gen/openapi/openapi.swagger.json`. The `client` package wraps both transports
-with mTLS helpers and typed methods for every RPC:
+`gen/openapi/openapi.swagger.json`. The generated `gen/client` package wraps
+both transports with mTLS helpers and typed methods for every RPC:
 
 ```go
 grpcClient, err := client.NewGRPCFromFiles(target, certFile, keyFile, caFile)
