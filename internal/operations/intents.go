@@ -30,6 +30,9 @@ type ExportIntent struct {
 
 type UnexportIntent struct {
 	Force bool `json:"force"`
+	// RequestID makes an explicit admin disable a distinct operation when the
+	// same volume is exported and disabled again later.
+	RequestID string `json:"request_id,omitempty"`
 }
 
 type ResizeIntent struct {

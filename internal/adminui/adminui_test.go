@@ -41,6 +41,20 @@ func (provider *testTargetMetricsProvider) Metrics(context.Context) (target.ISCS
 	return provider.metrics, provider.err
 }
 
+type testTargetDisabler struct {
+	calls    int
+	owner    string
+	volumeID string
+	err      error
+}
+
+func (disabler *testTargetDisabler) DisableTarget(_ context.Context, owner, volumeID string) error {
+	disabler.calls++
+	disabler.owner = owner
+	disabler.volumeID = volumeID
+	return disabler.err
+}
+
 type testVGService struct {
 	vgs      []state.VG
 	capacity lvm.Capacity
@@ -508,6 +522,66 @@ func TestAdminUIStatusMetricsAndRates(t *testing.T) {
 	}
 	if status.Metrics.Available || status.Metrics.Error == "" {
 		t.Fatalf("metrics error = %#v", status.Metrics)
+	}
+}
+
+func TestAdminUIDisableISCSITarget(t *testing.T) {
+	server, store, _, _ := newTestServer(t)
+	now := time.Now().UTC()
+	if err := store.Transact(context.Background(), func(tx state.Tx) error {
+		return tx.PutExport(state.Export{
+			Owner: "owner", VolumeID: "vol1", Protocol: "iscsi", Initiator: "iqn.i",
+			TargetName: "iqn.t", Portal: "127.0.0.1:3260", State: "exported",
+			CreatedAt: now, UpdatedAt: now,
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	server.options.DisableTarget = nil
+	response := doRequest(t, server, http.MethodPost, "/api/targets/disable",
+		[]byte(`{"owner":"owner","volume_id":"vol1"}`),
+		map[string]string{"Content-Type": "application/json"})
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("unconfigured disable = %d", response.Code)
+	}
+	disabler := &testTargetDisabler{}
+	server.options.DisableTarget = disabler
+	response = doRequest(t, server, http.MethodPost, "/api/targets/disable",
+		[]byte(`{"owner":"owner","volume_id":"vol1"}`),
+		map[string]string{"Content-Type": "application/json"})
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("disable = %d %s", response.Code, response.Body.String())
+	}
+	if disabler.calls != 1 || disabler.owner != "owner" || disabler.volumeID != "vol1" {
+		t.Fatalf("disable call = %#v", disabler)
+	}
+
+	if err := store.Transact(context.Background(), func(tx state.Tx) error {
+		return tx.PutExport(state.Export{
+			Owner: "owner", VolumeID: "vol1", Protocol: "nvme-tcp", Initiator: "iqn.i",
+			TargetName: "nqn.t", Portal: "127.0.0.1:4420", State: "exported",
+			CreatedAt: now, UpdatedAt: now,
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	response = doRequest(t, server, http.MethodPost, "/api/targets/disable",
+		[]byte(`{"owner":"owner","volume_id":"vol1"}`),
+		map[string]string{"Content-Type": "application/json"})
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("non-iSCSI target = %d", response.Code)
+	}
+	response = doRequest(t, server, http.MethodPost, "/api/targets/disable",
+		[]byte(`{"owner":"owner","volume_id":"missing"}`),
+		map[string]string{"Content-Type": "application/json"})
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("missing target = %d", response.Code)
+	}
+	response = doRequest(t, server, http.MethodPost, "/api/targets/disable",
+		[]byte(`{"owner":"owner"}`),
+		map[string]string{"Content-Type": "application/json"})
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("invalid request = %d", response.Code)
 	}
 }
 

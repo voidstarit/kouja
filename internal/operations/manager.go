@@ -53,6 +53,22 @@ func New(store *state.Store, lvmBackend lvm.Backend, iscsi, nvmet target.Exporte
 	}
 }
 
+// DisableTarget force-unexports a volume's target without deleting the volume
+// or export row. The unique request intent prevents a later disable after a
+// re-export from being mistaken for the previous idempotent unexport.
+func (manager *Manager) DisableTarget(ctx context.Context, owner, volumeID string) error {
+	requestID := "admin-ui-disable-" + uuid.NewString()
+	intent, err := json.Marshal(UnexportIntent{Force: true, RequestID: requestID})
+	if err != nil {
+		return err
+	}
+	_, err = manager.Run(ctx, Request{
+		Owner: owner, VolumeID: volumeID, Action: ActionUnexport,
+		Intent: intent, RequestID: requestID,
+	})
+	return err
+}
+
 func (manager *Manager) Run(ctx context.Context, request Request) (Result, error) {
 	if ctx == nil {
 		ctx = context.Background()

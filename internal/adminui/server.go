@@ -47,6 +47,10 @@ type CapacityProvider interface {
 	Capacity(context.Context, string) (lvm.Capacity, error)
 }
 
+type TargetDisabler interface {
+	DisableTarget(context.Context, string, string) error
+}
+
 type Options struct {
 	ConfigPath    string
 	Config        *config.Config
@@ -66,6 +70,7 @@ type Options struct {
 	Listener      net.Listener
 	Metrics       *observability.Metrics
 	TargetMetrics target.ISCSIMetricsProvider
+	DisableTarget TargetDisabler
 	VGClassGate   *sync.Mutex
 }
 
@@ -260,6 +265,15 @@ func (server *Server) serveHTTP(response http.ResponseWriter, request *http.Requ
 			return
 		}
 		server.handleDeregisterVG(response, request)
+	case request.URL.Path == "/api/targets/disable":
+		if request.Method != http.MethodPost {
+			methodNotAllowed(response)
+			return
+		}
+		if !server.authorizeMutation(response, request, "application/json") {
+			return
+		}
+		server.handleDisableTarget(response, request)
 	case request.URL.Path == "/api/classes":
 		if request.Method != http.MethodGet {
 			methodNotAllowed(response)

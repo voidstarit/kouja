@@ -116,6 +116,10 @@ use a new live registry. Neither restarts the whole storage service.
     IP/port connections. Metrics are read from LIO configfs plus
     `/proc/net/tcp(6)` and are best-effort; metrics unavailability never fails
     the status response.
+*   Allow an operator to disable a live iSCSI target from the target table.
+    Disabling force-unexports the target, drops active sessions, and leaves the
+    volume and export definition in SQLite in the existing `available`/
+    `unexported` state. It does not delete the volume or target definition.
 *   Show up to 256 volumes and up to 64 problem operations. When the result is
     truncated, show the total counts and a visible truncation notice.
 *   Show running, failed, and `needs_attention` operations with action, owner,
@@ -479,6 +483,7 @@ change does not produce a reason. No other field sets `restart_required`.
 | `GET` | `/api/classes` | `200` | `500` | Current class-to-VG map. |
 | `PUT` | `/api/classes/{name}` | `200` | `400`, `409`, `422`, `500` | Body `{"vg":"vg"}`. Sets a class mapping live and persists it. |
 | `DELETE` | `/api/classes/{name}` | `204` | `404`, `409`, `500` | Removes a class mapping live and persists it; `409` on config-lock conflict. |
+| `POST` | `/api/targets/disable` | `204` | `400`, `404`, `409`, `415`, `422`, `500`, `503` | Body `{"owner":"...","volume_id":"..."}`. Force-unexports only an iSCSI target, drops active sessions, and retains the SQLite volume/export definition. |
 | `GET` | `/api/certificates` | `200` | `500` | Lists regular `.crt`, `.key`, and `.pem` files in `admin_ui.client_cert_dir` and, separately, the public `listen.tls.client_ca_file` as `ca`. A missing/unsafe directory is reported in the body, not as a crash. |
 | `GET` | `/api/certificates/{name}` | `200` | `404`, `405` | Downloads one allowed file with `Content-Disposition: attachment`. Path traversal, symlinks, and non-allowlisted names are `404`. |
 | `GET` | `/api/ca` | `200` | `404`, `405` | Downloads `listen.tls.client_ca_file` (the public CA certificate only; the CA private key is never served). |
@@ -492,7 +497,8 @@ All API errors use `Content-Type: application/json` and:
 Codes: `bad_request`, `forbidden`, `not_found`, `method_not_allowed`,
 `conflict`, `too_large`, `unsupported_media_type`, `invalid_config`,
 `precondition_required`, `internal_error`, `unavailable`, `vg_unavailable`,
-`vg_in_use`, `vg_conflict`, `class_conflict`.
+`vg_in_use`, `vg_conflict`, `class_conflict`, `invalid_target`, `volume_in_drift`,
+`session_active`, `session_unknown`, `operation_in_progress`.
 
 Global Host and mutation rules:
 
@@ -1038,6 +1044,16 @@ audit failure is logged only. These mutations never restart. The class file
 write and the live map swap are one logical action; the live map is updated
 before the response, so the running and disk views match.
 
+`POST /api/targets/disable` accepts an owner and volume ID for an existing
+iSCSI export. The server verifies the export protocol, then calls the shared
+operation manager with a forced unexport. The target adapter disables the TPG
+and removes the target/ACL, dropping active sessions; the manager retains the
+volume and export rows and records `volume.state:"available"` /
+`export.state:"unexported"`. The endpoint returns `204` with no body. It is
+idempotent per target generation and creates a distinct operation after a
+later re-export because the admin action carries a unique request ID in the
+unexport intent.
+
 ### Last known-good configuration
 
 When the admin UI is enabled, after the agent has loaded the configuration,
@@ -1286,6 +1302,7 @@ type Options struct {
     Listener      net.Listener
     Metrics       *observability.Metrics
     TargetMetrics target.ISCSIMetricsProvider
+    DisableTarget TargetDisabler
     VGClassGate   *sync.Mutex
 }
 
@@ -1342,6 +1359,9 @@ restarts.
 | Class VG already mapped by another class | `409` with `class_conflict`; no config or registry change. |
 | Class remove missing | `404` with `not_found`; no config change. |
 | Class lock/unsafe/I/O failure | `409` for lock; `422` for unsafe path; `500` for I/O; live registry unchanged on failure. |
+| Target disable with active sessions | Forced unexport; `204`; target/ACL removed, sessions dropped, volume/export rows retained. |
+| Target disable on a non-iSCSI export | `422` with `invalid_target`; no target or state change. |
+| Target disable on a missing definition | `404` with `not_found`; no target or state change. |
 | Config changed, binding socket unchanged | `200`, `config_changed:true`, `restart_required:false`. |
 | Binding socket changed | `200`, `config_changed:true`, `restart_required:true`; operator restarts manually. |
 | LVM capacity probe fails for one VG | VG `unavailable` + `errors` entry; page still renders. |
@@ -1920,7 +1940,7 @@ modified is listed. Phase checkpoints are included.
     `GET /`, `GET /assets/`, `GET /favicon.ico`, `GET /api/status`,
     `GET /api/config`, `PUT /api/config`, `GET/POST /api/vgs`,
     `DELETE /api/vgs/{name}`, `GET /api/classes`,
-    `PUT/DELETE /api/classes/{name}`. Methods:
+    `PUT/DELETE /api/classes/{name}`, `POST /api/targets/disable`. Methods:
     ```go
     func New(options Options) (*Server, error)
     func (server *Server) Handler() http.Handler
@@ -1931,7 +1951,7 @@ modified is listed. Phase checkpoints are included.
     ```
     `Options{ConfigPath, Config, ConfigData, Store, Capacity, VGs, Classes,
     Ready, HostUUID, AgentVersion, APIVersion, StartedAt, Logger, Now, Assets,
-    Listener, Metrics, VGClassGate}`. `New` validates nil dependencies, a non-empty
+    Listener, Metrics, TargetMetrics, DisableTarget, VGClassGate}`. `New` validates nil dependencies, a non-empty
     `ConfigPath`, disabled state, binds loopback, verifies the address, stores
     the parsed startup configuration, and derives the allowed Host set from the
     actual listener port (so injected ephemeral listeners work). Middleware
@@ -2311,7 +2331,7 @@ modified is listed. Phase checkpoints are included.
     totals, sampled rates, per-target volume/initiator rows, client IP/port
     connections, LUN status, and error/reset counters; render `—` when
     `rates_available` is false. The `TrafficCard` child component owns the
-    tables and error-detail formatting.
+    tables, the Disable action, and error-detail formatting.
     Pass truncation flags. No restart button and no VG/class mutation controls;
     those live in `ConfigPage`.
 
@@ -2321,9 +2341,10 @@ modified is listed. Phase checkpoints are included.
 *   **Proposed Changes**: Render aggregate read/write/command rates and totals,
     session count, per-target volume/initiator rows, initiator RX/TX and PDU
     counts, LUN status/busy/reset information, established client IP/port
-    connections, target mapping, and error details. Show `—` for unavailable
-    rates and explicit unavailable/error messages when metrics or connection
-    collection fails.
+    connections, target mapping, and error details. Add a per-target Disable
+    button with a warning that active sessions will be dropped and that the
+    database definition remains. Show `—` for unavailable rates and explicit
+    unavailable/error messages when metrics or connection collection fails.
 
 #### 48. `web/src/components/ConfigPage.tsx` (Create)
 

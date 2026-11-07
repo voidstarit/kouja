@@ -156,8 +156,8 @@ func run() error {
 		Store: store, Capacity: lvmBackend, VGs: vgManager, Classes: classMap,
 		Ready: ready.Load, HostUUID: hostUUID, AgentVersion: agentVersion,
 		APIVersion: apiVersion, StartedAt: time.Now(), Logger: logger, Metrics: metrics,
-		TargetMetrics: iscsi,
-		VGClassGate:   vgClassGate,
+		TargetMetrics: iscsi, DisableTarget: manager,
+		VGClassGate: vgClassGate,
 	})
 	if adminServer != nil {
 		logger.Warn("local admin UI enabled without authentication; any local process is root-equivalent",

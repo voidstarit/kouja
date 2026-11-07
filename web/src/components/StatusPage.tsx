@@ -90,7 +90,11 @@ export function StatusPage({ status, loading, error, onRefresh }: StatusPageProp
           </div>
         </div>
       </section>
-      <TrafficCard metrics={status.metrics} iscsiEnabled={status.iscsi.enabled} />
+      <TrafficCard
+        metrics={status.metrics}
+        iscsiEnabled={status.iscsi.enabled}
+        onRefresh={onRefresh}
+      />
       <section class="card">
         <h2>Volume groups</h2>
         <div class="table-scroll">

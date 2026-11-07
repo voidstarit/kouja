@@ -128,15 +128,16 @@ func (backend *fakeLVM) Eligibility(context.Context, string) error {
 }
 
 type fakeExporter struct {
-	mu          sync.Mutex
-	exports     map[string]target.ExportResult
-	observation target.ExportObservation
-	exportErr   error
-	unexportErr error
-	deleteErr   error
-	exportCalls int
-	resizeCalls int
-	resizeErr   error
+	mu            sync.Mutex
+	exports       map[string]target.ExportResult
+	observation   target.ExportObservation
+	exportErr     error
+	unexportErr   error
+	deleteErr     error
+	exportCalls   int
+	unexportCalls int
+	resizeCalls   int
+	resizeErr     error
 }
 
 func newFakeExporter() *fakeExporter {
@@ -165,6 +166,7 @@ func (exporter *fakeExporter) Export(_ context.Context, spec target.ExportSpec, 
 func (exporter *fakeExporter) Unexport(_ context.Context, spec target.ExportSpec, _ bool) error {
 	exporter.mu.Lock()
 	defer exporter.mu.Unlock()
+	exporter.unexportCalls++
 	if exporter.unexportErr != nil {
 		return exporter.unexportErr
 	}

@@ -1,3 +1,5 @@
+import { useState } from "preact/hooks";
+import { disableISCSITarget } from "../api";
 import { formatBytes, formatTime } from "../format";
 import type { MetricsErrorsView, MetricsView, TargetMetricsView } from "../types";
 
@@ -57,12 +59,45 @@ function connectionTargetLabel(target: TargetMetricsView | undefined, ambiguous:
 export function TrafficCard({
   metrics,
   iscsiEnabled,
+  onRefresh,
 }: {
   metrics: MetricsView;
   iscsiEnabled: boolean;
+  onRefresh: () => void;
 }) {
+  const [disabling, setDisabling] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [notice, setNotice] = useState("");
   const showRates = metrics.rates_available;
   const sessions = metrics.targets.reduce((sum, target) => sum + target.sessions, 0);
+
+  async function disableTarget(target: TargetMetricsView) {
+    if (!target.volume_owner || !target.volume_id) {
+      return;
+    }
+    const confirmed = window.confirm(
+      `Disable the iSCSI target for ${target.volume_owner}/${target.volume_id}?\n\n` +
+        "Active sessions will be forcefully dropped. The volume and target definition remain in the database.",
+    );
+    if (!confirmed) {
+      return;
+    }
+    setDisabling(target.target);
+    setActionError("");
+    setNotice("");
+    try {
+      await disableISCSITarget(target.volume_owner, target.volume_id);
+      setNotice(
+        `Target for ${target.volume_owner}/${target.volume_id} was disabled. The export definition remains in the database.`,
+      );
+      onRefresh();
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setDisabling("");
+    }
+  }
+
   return (
     <section class="card">
       <div class="section-heading">
@@ -71,6 +106,8 @@ export function TrafficCard({
           {metrics.available ? `sampled ${formatTime(metrics.sampled_at)}` : "unavailable"}
         </span>
       </div>
+      {actionError && <p class="error">{actionError}</p>}
+      {notice && <p class="success">{notice}</p>}
       {!metrics.available ? (
         <p class={metrics.error ? "error" : "muted"}>
           {metrics.error ||
@@ -165,12 +202,13 @@ export function TrafficCard({
                   <th>Write/s</th>
                   <th>Commands</th>
                   <th>Errors</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {metrics.targets.length === 0 && (
                   <tr>
-                    <td colSpan={9} class="empty">
+                    <td colSpan={10} class="empty">
                       No iSCSI target metrics.
                     </td>
                   </tr>
@@ -240,6 +278,20 @@ export function TrafficCard({
                         <div class="muted">{commandRate(target.commands_per_second, targetRates)}</div>
                       </td>
                       <td class={target.error_count > 0 ? "error" : "muted"}>{targetErrors(target)}</td>
+                      <td>
+                        <button
+                          class="danger"
+                          disabled={!target.volume_owner || !target.volume_id || disabling === target.target}
+                          title={
+                            target.volume_owner && target.volume_id
+                              ? "Remove the live target and forcefully drop active sessions"
+                              : "Target is not linked to a volume definition"
+                          }
+                          onClick={() => void disableTarget(target)}
+                        >
+                          {disabling === target.target ? "Disabling…" : "Disable"}
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}

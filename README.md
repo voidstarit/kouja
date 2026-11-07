@@ -196,7 +196,9 @@ commands, session RX/TX, sampled read/write/command rates, LUN status, and
 login/session/abort/reset error counters. It also shows established client
 IP/port connections, matched to the target and initiator where the session
 endpoint is unambiguous. These counters are best-effort and never block the
-status view.
+status view. Each live iSCSI target has a **Disable** action: it force-removes
+the live LIO target and drops active sessions while retaining the volume and
+export definition in SQLite.
 It can edit the full YAML file with validation and atomic writes, and it can
 register/deregister VGs and add/remove class mappings live through the same VG
 logic as the mTLS admin API. It never restarts the service. A binding-socket
