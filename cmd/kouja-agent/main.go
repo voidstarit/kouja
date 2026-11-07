@@ -156,7 +156,7 @@ func run() error {
 		Store: store, Capacity: lvmBackend, VGs: vgManager, Classes: classMap,
 		Ready: ready.Load, HostUUID: hostUUID, AgentVersion: agentVersion,
 		APIVersion: apiVersion, StartedAt: time.Now(), Logger: logger, Metrics: metrics,
-		TargetMetrics: iscsi, DisableTarget: manager,
+		TargetMetrics: iscsi, DisableTarget: manager, EnableTarget: manager,
 		VGClassGate: vgClassGate,
 	})
 	if adminServer != nil {

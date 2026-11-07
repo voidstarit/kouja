@@ -198,7 +198,9 @@ IP/port connections, matched to the target and initiator where the session
 endpoint is unambiguous. These counters are best-effort and never block the
 status view. Each live iSCSI target has a **Disable** action: it force-removes
 the live LIO target and drops active sessions while retaining the volume and
-export definition in SQLite.
+export definition in SQLite. The volume row then shows **Enable target** to
+recreate the target from the stored definition, generating a new credential
+when the previous one was superseded.
 It can edit the full YAML file with validation and atomic writes, and it can
 register/deregister VGs and add/remove class mappings live through the same VG
 logic as the mTLS admin API. It never restarts the service. A binding-socket

@@ -27,6 +27,7 @@ import (
 	"github.com/voidstarit/kouja/internal/agent"
 	"github.com/voidstarit/kouja/internal/config"
 	"github.com/voidstarit/kouja/internal/lvm"
+	"github.com/voidstarit/kouja/internal/operations"
 	"github.com/voidstarit/kouja/internal/state"
 	"github.com/voidstarit/kouja/internal/target"
 	"gopkg.in/yaml.v3"
@@ -42,10 +43,12 @@ func (provider *testTargetMetricsProvider) Metrics(context.Context) (target.ISCS
 }
 
 type testTargetDisabler struct {
-	calls    int
-	owner    string
-	volumeID string
-	err      error
+	calls       int
+	enableCalls int
+	owner       string
+	volumeID    string
+	err         error
+	enableErr   error
 }
 
 func (disabler *testTargetDisabler) DisableTarget(_ context.Context, owner, volumeID string) error {
@@ -53,6 +56,13 @@ func (disabler *testTargetDisabler) DisableTarget(_ context.Context, owner, volu
 	disabler.owner = owner
 	disabler.volumeID = volumeID
 	return disabler.err
+}
+
+func (disabler *testTargetDisabler) EnableTarget(_ context.Context, owner, volumeID string) error {
+	disabler.enableCalls++
+	disabler.owner = owner
+	disabler.volumeID = volumeID
+	return disabler.enableErr
 }
 
 type testVGService struct {
@@ -538,14 +548,22 @@ func TestAdminUIDisableISCSITarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	server.options.DisableTarget = nil
+	server.options.EnableTarget = nil
 	response := doRequest(t, server, http.MethodPost, "/api/targets/disable",
 		[]byte(`{"owner":"owner","volume_id":"vol1"}`),
 		map[string]string{"Content-Type": "application/json"})
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("unconfigured disable = %d", response.Code)
 	}
+	response = doRequest(t, server, http.MethodPost, "/api/targets/enable",
+		[]byte(`{"owner":"owner","volume_id":"vol1"}`),
+		map[string]string{"Content-Type": "application/json"})
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("unconfigured enable = %d", response.Code)
+	}
 	disabler := &testTargetDisabler{}
 	server.options.DisableTarget = disabler
+	server.options.EnableTarget = disabler
 	response = doRequest(t, server, http.MethodPost, "/api/targets/disable",
 		[]byte(`{"owner":"owner","volume_id":"vol1"}`),
 		map[string]string{"Content-Type": "application/json"})
@@ -554,6 +572,15 @@ func TestAdminUIDisableISCSITarget(t *testing.T) {
 	}
 	if disabler.calls != 1 || disabler.owner != "owner" || disabler.volumeID != "vol1" {
 		t.Fatalf("disable call = %#v", disabler)
+	}
+	response = doRequest(t, server, http.MethodPost, "/api/targets/enable",
+		[]byte(`{"owner":"owner","volume_id":"vol1"}`),
+		map[string]string{"Content-Type": "application/json"})
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("enable = %d %s", response.Code, response.Body.String())
+	}
+	if disabler.enableCalls != 1 || disabler.owner != "owner" || disabler.volumeID != "vol1" {
+		t.Fatalf("enable call = %#v", disabler)
 	}
 
 	if err := store.Transact(context.Background(), func(tx state.Tx) error {
@@ -582,6 +609,36 @@ func TestAdminUIDisableISCSITarget(t *testing.T) {
 		map[string]string{"Content-Type": "application/json"})
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("invalid request = %d", response.Code)
+	}
+}
+
+func TestTargetActionErrorMappings(t *testing.T) {
+	tests := []struct {
+		err    error
+		status int
+		code   string
+	}{
+		{state.ErrNotFound, http.StatusNotFound, "not_found"},
+		{operations.ErrVolumeInDrift, http.StatusConflict, "volume_in_drift"},
+		{operations.ErrSessionActive, http.StatusConflict, "session_active"},
+		{operations.ErrSessionUnknown, http.StatusConflict, "session_unknown"},
+		{operations.ErrOperationInProgress, http.StatusConflict, "operation_in_progress"},
+		{operations.ErrVolumeAlreadyExport, http.StatusConflict, "already_exported"},
+		{operations.ErrInvalidRequest, http.StatusUnprocessableEntity, "invalid_target"},
+		{target.ErrConflict, http.StatusConflict, "conflict"},
+		{context.Canceled, http.StatusGatewayTimeout, "timeout"},
+		{errors.New("other"), http.StatusInternalServerError, "internal_error"},
+	}
+	for _, test := range tests {
+		recorder := httptest.NewRecorder()
+		writeTargetActionError(recorder, test.err)
+		var body APIError
+		if err := jsonUnmarshal(recorder.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if recorder.Code != test.status || body.Code != test.code {
+			t.Fatalf("%v: status=%d code=%q, want %d %q", test.err, recorder.Code, body.Code, test.status, test.code)
+		}
 	}
 }
 

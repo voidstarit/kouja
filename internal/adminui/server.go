@@ -51,6 +51,10 @@ type TargetDisabler interface {
 	DisableTarget(context.Context, string, string) error
 }
 
+type TargetEnabler interface {
+	EnableTarget(context.Context, string, string) error
+}
+
 type Options struct {
 	ConfigPath    string
 	Config        *config.Config
@@ -71,6 +75,7 @@ type Options struct {
 	Metrics       *observability.Metrics
 	TargetMetrics target.ISCSIMetricsProvider
 	DisableTarget TargetDisabler
+	EnableTarget  TargetEnabler
 	VGClassGate   *sync.Mutex
 }
 
@@ -274,6 +279,15 @@ func (server *Server) serveHTTP(response http.ResponseWriter, request *http.Requ
 			return
 		}
 		server.handleDisableTarget(response, request)
+	case request.URL.Path == "/api/targets/enable":
+		if request.Method != http.MethodPost {
+			methodNotAllowed(response)
+			return
+		}
+		if !server.authorizeMutation(response, request, "application/json") {
+			return
+		}
+		server.handleEnableTarget(response, request)
 	case request.URL.Path == "/api/classes":
 		if request.Method != http.MethodGet {
 			methodNotAllowed(response)

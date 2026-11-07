@@ -26,6 +26,9 @@ type ExportIntent struct {
 	RotateCredential bool   `json:"rotate_credential,omitempty"`
 	Force            bool   `json:"force,omitempty"`
 	AttachmentID     string `json:"attachment_id,omitempty"`
+	// RequestID makes an explicit admin enable a distinct operation when the
+	// same target is disabled and enabled again later.
+	RequestID string `json:"request_id,omitempty"`
 }
 
 type UnexportIntent struct {

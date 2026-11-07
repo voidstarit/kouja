@@ -69,6 +69,37 @@ func (manager *Manager) DisableTarget(ctx context.Context, owner, volumeID strin
 	return err
 }
 
+// EnableTarget re-exports an existing iSCSI export definition after it was
+// disabled. It reuses the stored target/initiator/portal definition and
+// creates a new credential when the previous unexport superseded it.
+func (manager *Manager) EnableTarget(ctx context.Context, owner, volumeID string) error {
+	var export state.Export
+	if err := manager.store.Transact(ctx, func(tx state.Tx) error {
+		value, err := tx.GetExport(owner, volumeID)
+		if err != nil {
+			return err
+		}
+		export = value
+		return nil
+	}); err != nil {
+		return err
+	}
+	requestID := "admin-ui-enable-" + uuid.NewString()
+	intent, err := json.Marshal(ExportIntent{
+		Protocol: export.Protocol, Initiator: export.Initiator,
+		TargetName: export.TargetName, Portal: export.Portal,
+		RequestID: requestID,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = manager.Run(ctx, Request{
+		Owner: owner, VolumeID: volumeID, Action: ActionExport,
+		Intent: intent, RequestID: requestID,
+	})
+	return err
+}
+
 func (manager *Manager) Run(ctx context.Context, request Request) (Result, error) {
 	if ctx == nil {
 		ctx = context.Background()

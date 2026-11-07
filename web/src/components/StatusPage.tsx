@@ -158,6 +158,7 @@ export function StatusPage({ status, loading, error, onRefresh }: StatusPageProp
         volumes={status.volumes}
         truncated={status.counts.truncated_volumes}
         total={status.counts.volumes}
+        onRefresh={onRefresh}
       />
       <OperationsTable
         operations={status.operations}

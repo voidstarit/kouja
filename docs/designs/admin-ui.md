@@ -120,6 +120,9 @@ use a new live registry. Neither restarts the whole storage service.
     Disabling force-unexports the target, drops active sessions, and leaves the
     volume and export definition in SQLite in the existing `available`/
     `unexported` state. It does not delete the volume or target definition.
+    A disabled iSCSI export remains visible in the volume table with an
+    **Enable target** action that recreates the target from the stored
+    definition and rotates in a new credential.
 *   Show up to 256 volumes and up to 64 problem operations. When the result is
     truncated, show the total counts and a visible truncation notice.
 *   Show running, failed, and `needs_attention` operations with action, owner,
@@ -484,6 +487,7 @@ change does not produce a reason. No other field sets `restart_required`.
 | `PUT` | `/api/classes/{name}` | `200` | `400`, `409`, `422`, `500` | Body `{"vg":"vg"}`. Sets a class mapping live and persists it. |
 | `DELETE` | `/api/classes/{name}` | `204` | `404`, `409`, `500` | Removes a class mapping live and persists it; `409` on config-lock conflict. |
 | `POST` | `/api/targets/disable` | `204` | `400`, `404`, `409`, `415`, `422`, `500`, `503` | Body `{"owner":"...","volume_id":"..."}`. Force-unexports only an iSCSI target, drops active sessions, and retains the SQLite volume/export definition. |
+| `POST` | `/api/targets/enable` | `204` | `400`, `404`, `409`, `415`, `422`, `500`, `503` | Body `{"owner":"...","volume_id":"..."}`. Recreates a disabled iSCSI target from its stored definition and creates a new credential if needed. |
 | `GET` | `/api/certificates` | `200` | `500` | Lists regular `.crt`, `.key`, and `.pem` files in `admin_ui.client_cert_dir` and, separately, the public `listen.tls.client_ca_file` as `ca`. A missing/unsafe directory is reported in the body, not as a crash. |
 | `GET` | `/api/certificates/{name}` | `200` | `404`, `405` | Downloads one allowed file with `Content-Disposition: attachment`. Path traversal, symlinks, and non-allowlisted names are `404`. |
 | `GET` | `/api/ca` | `200` | `404`, `405` | Downloads `listen.tls.client_ca_file` (the public CA certificate only; the CA private key is never served). |
@@ -498,7 +502,7 @@ Codes: `bad_request`, `forbidden`, `not_found`, `method_not_allowed`,
 `conflict`, `too_large`, `unsupported_media_type`, `invalid_config`,
 `precondition_required`, `internal_error`, `unavailable`, `vg_unavailable`,
 `vg_in_use`, `vg_conflict`, `class_conflict`, `invalid_target`, `volume_in_drift`,
-`session_active`, `session_unknown`, `operation_in_progress`.
+`session_active`, `session_unknown`, `operation_in_progress`, `already_exported`.
 
 Global Host and mutation rules:
 
@@ -1054,6 +1058,14 @@ idempotent per target generation and creates a distinct operation after a
 later re-export because the admin action carries a unique request ID in the
 unexport intent.
 
+`POST /api/targets/enable` accepts the same owner and volume ID. It loads the
+stored iSCSI export definition and runs an export operation using the retained
+target, initiator, and portal fields. If the prior disable superseded the
+credential, the operation generates a new credential and installs it on the
+recreated target. The volume and export return to `exported` state. The action
+carries a unique request ID so disable/enable cycles do not replay an older
+operation.
+
 ### Last known-good configuration
 
 When the admin UI is enabled, after the agent has loaded the configuration,
@@ -1303,6 +1315,7 @@ type Options struct {
     Metrics       *observability.Metrics
     TargetMetrics target.ISCSIMetricsProvider
     DisableTarget TargetDisabler
+    EnableTarget  TargetEnabler
     VGClassGate   *sync.Mutex
 }
 
@@ -1362,6 +1375,8 @@ restarts.
 | Target disable with active sessions | Forced unexport; `204`; target/ACL removed, sessions dropped, volume/export rows retained. |
 | Target disable on a non-iSCSI export | `422` with `invalid_target`; no target or state change. |
 | Target disable on a missing definition | `404` with `not_found`; no target or state change. |
+| Target enable | Target recreated from the stored definition; `204`; the volume/export returns to exported state and a new credential is created if the old one was superseded. |
+| Target enable while already exported | Idempotent export reconciliation; `204` or a mapped conflict if the target cannot be recreated. |
 | Config changed, binding socket unchanged | `200`, `config_changed:true`, `restart_required:false`. |
 | Binding socket changed | `200`, `config_changed:true`, `restart_required:true`; operator restarts manually. |
 | LVM capacity probe fails for one VG | VG `unavailable` + `errors` entry; page still renders. |
@@ -1940,7 +1955,8 @@ modified is listed. Phase checkpoints are included.
     `GET /`, `GET /assets/`, `GET /favicon.ico`, `GET /api/status`,
     `GET /api/config`, `PUT /api/config`, `GET/POST /api/vgs`,
     `DELETE /api/vgs/{name}`, `GET /api/classes`,
-    `PUT/DELETE /api/classes/{name}`, `POST /api/targets/disable`. Methods:
+    `PUT/DELETE /api/classes/{name}`, `POST /api/targets/disable`,
+    `POST /api/targets/enable`. Methods:
     ```go
     func New(options Options) (*Server, error)
     func (server *Server) Handler() http.Handler
@@ -1951,7 +1967,7 @@ modified is listed. Phase checkpoints are included.
     ```
     `Options{ConfigPath, Config, ConfigData, Store, Capacity, VGs, Classes,
     Ready, HostUUID, AgentVersion, APIVersion, StartedAt, Logger, Now, Assets,
-    Listener, Metrics, TargetMetrics, DisableTarget, VGClassGate}`. `New` validates nil dependencies, a non-empty
+    Listener, Metrics, TargetMetrics, DisableTarget, EnableTarget, VGClassGate}`. `New` validates nil dependencies, a non-empty
     `ConfigPath`, disabled state, binds loopback, verifies the address, stores
     the parsed startup configuration, and derives the allowed Host set from the
     actual listener port (so injected ephemeral listeners work). Middleware
@@ -2387,7 +2403,9 @@ modified is listed. Phase checkpoints are included.
 *   **Proposed Changes**: Props `{volumes, truncated, total}`. Render identity,
     owner, VG/class, sizes, state, serving, drift reasons, export, target/ACL/
     namespace presence, active sessions (`unknown` when null), session state,
-    ACL/observed initiator, observation times/stale, update time. A null
+    ACL/observed initiator, observation times/stale, update time. Show an
+    **Enable target** action when an iSCSI export is `unexported`; it calls the
+    target-enable endpoint and refreshes status. A null
     export/observation/export_observation renders `unknown`, not `false`.
     Problems-only filter predicate:
     `state === "drift" || state === "failed" || drift_reasons.length > 0`.

@@ -1,3 +1,5 @@
+import { useState } from "preact/hooks";
+import { enableISCSITarget } from "../api";
 import { formatBytes, formatTime } from "../format";
 import type { VolumeStatus } from "../types";
 import { StateBadge } from "./StateBadge";
@@ -6,11 +8,33 @@ export function VolumesTable({
   volumes,
   truncated,
   total,
+  onRefresh,
 }: {
   volumes: VolumeStatus[];
   truncated: boolean;
   total: number;
+  onRefresh: () => void;
 }) {
+  const [enabling, setEnabling] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  async function enableTarget(volume: VolumeStatus) {
+    const key = `${volume.owner}/${volume.volume_id}`;
+    setEnabling(key);
+    setActionError("");
+    setNotice("");
+    try {
+      await enableISCSITarget(volume.owner, volume.volume_id);
+      setNotice(`Target for ${key} was enabled.`);
+      onRefresh();
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setEnabling("");
+    }
+  }
+
   return (
     <section class="card">
       <div class="section-heading">
@@ -22,6 +46,8 @@ export function VolumesTable({
       {truncated && (
         <p class="notice">The volume list is truncated. Use the mTLS API for a complete inventory.</p>
       )}
+      {actionError && <p class="error">{actionError}</p>}
+      {notice && <p class="success">{notice}</p>}
       <div class="table-scroll">
         <table>
           <thead>
@@ -80,6 +106,17 @@ export function VolumesTable({
                         <StateBadge state={exportState.state} />
                         <div class="muted">{exportState.protocol} · {exportState.initiator}</div>
                         <div class="mono muted">{exportState.portal}</div>
+                        {exportState.protocol === "iscsi" && exportState.state === "unexported" && (
+                          <button
+                            disabled={enabling === `${volume.owner}/${volume.volume_id}`}
+                            title="Recreate the disabled iSCSI target from the stored definition"
+                            onClick={() => void enableTarget(volume)}
+                          >
+                            {enabling === `${volume.owner}/${volume.volume_id}`
+                              ? "Enabling…"
+                              : "Enable target"}
+                          </button>
+                        )}
                         {exportObservation && (
                           <>
                             <div class="muted">

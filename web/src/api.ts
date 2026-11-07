@@ -103,6 +103,15 @@ export async function disableISCSITarget(owner: string, volumeID: string): Promi
   await parseResponse<void>(response);
 }
 
+export async function enableISCSITarget(owner: string, volumeID: string): Promise<void> {
+  const response = await fetch("/api/targets/enable", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ owner, volume_id: volumeID }),
+  });
+  await parseResponse<void>(response);
+}
+
 export async function getCertificates(): Promise<CertificatesResponse> {
   const response = await fetch("/api/certificates", { headers: { Accept: "application/json" } });
   return parseResponse<CertificatesResponse>(response);
