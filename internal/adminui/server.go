@@ -301,11 +301,18 @@ func (server *Server) serveHTTP(response http.ResponseWriter, request *http.Requ
 		}
 		server.handleDownloadCA(response, request)
 	case request.URL.Path == "/api/certificates":
-		if request.Method != http.MethodGet {
+		switch request.Method {
+		case http.MethodGet:
+			server.handleListCertificates(response, request)
+		case http.MethodPost:
+			if !server.authorizeMutation(response, request, "application/json") {
+				return
+			}
+			server.handleCreateCertificate(response, request)
+		default:
 			methodNotAllowed(response)
-			return
 		}
-		server.handleListCertificates(response, request)
+
 	case strings.HasPrefix(request.URL.Path, "/api/certificates/"):
 		if request.Method != http.MethodGet {
 			methodNotAllowed(response)

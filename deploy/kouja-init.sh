@@ -359,6 +359,7 @@ q() { yaml_quote "$1"; }
     echo "  address: 127.0.0.1:9444"
   fi
   echo "  client_cert_dir: $(q "$TLS_DIR/clients")"
+  echo "  client_ca_key_file: $(q "$CA_KEY")"
   echo "storage:"
   echo "  headroom_percent: 5"
   echo "  headroom_min_bytes: 1073741824"

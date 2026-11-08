@@ -77,6 +77,10 @@ func (server *Server) handleListCertificates(response http.ResponseWriter, _ *ht
 		if !allowedCertificateName(name) {
 			continue
 		}
+		filePath := filepath.Join(dir, name)
+		if server.isClientCAKey(filePath) {
+			continue
+		}
 		fileInfo, err := entry.Info()
 		if err != nil || !fileInfo.Mode().IsRegular() {
 			continue
@@ -87,7 +91,7 @@ func (server *Server) handleListCertificates(response http.ResponseWriter, _ *ht
 		}
 		role := roleFromCertificateName(name)
 		if kind == "certificate" {
-			if parsedRole := roleFromCertificate(filepath.Join(dir, name)); parsedRole != "" {
+			if parsedRole := roleFromCertificate(filePath); parsedRole != "" {
 				role = parsedRole
 			}
 		}
@@ -195,6 +199,10 @@ func (server *Server) handleDownloadCertificate(response http.ResponseWriter, re
 		return
 	}
 	path := filepath.Join(dir, name)
+	if server.isClientCAKey(path) {
+		writeAPIError(response, http.StatusNotFound, "not_found", "certificate not found")
+		return
+	}
 	info, err := os.Lstat(path) //nolint:gosec // path is a validated basename under the configured client certificate directory
 	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		writeAPIError(response, http.StatusNotFound, "not_found", "certificate not found")

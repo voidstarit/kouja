@@ -412,6 +412,7 @@ admin_ui:
   enabled: false
   address: 127.0.0.1:9444
   client_cert_dir: /etc/kouja/tls/clients
+  client_ca_key_file: /etc/kouja/tls/ca.key
 ```
 
 Rules:
@@ -425,7 +426,12 @@ Rules:
     and must be an absolute path when set. The local UI may list and download
     regular `.crt`, `.key`, and `.pem` files directly inside this directory;
     symlinks and files outside it are never served. Do not point it at the TLS
-    root, CA key, or server key directory.
+    root, CA key, or server key directory. Certificate issuance requires the
+    directory to be owned by the agent user and mode `0700`.
+*   `client_ca_key_file` defaults to `<directory of listen.tls.client_ca_file>/ca.key`
+    and must be absolute when set. It is used only to sign new client/admin
+    certificates from the local UI and is never listed or downloaded. It must
+    be a regular file owned by the agent user with mode `0600` or stricter.
 *   The loopback rule is validated whenever the section is present, even when
     `enabled` is false. An invalid `admin_ui` section is a configuration error
     and fails startup. The "non-fatal admin listener" rule applies only after
@@ -489,6 +495,7 @@ change does not produce a reason. No other field sets `restart_required`.
 | `POST` | `/api/targets/disable` | `204` | `400`, `404`, `409`, `415`, `422`, `500`, `503` | Body `{"owner":"...","volume_id":"..."}`. Force-unexports only an iSCSI target, drops active sessions, and retains the SQLite volume/export definition. |
 | `POST` | `/api/targets/enable` | `204` | `400`, `404`, `409`, `415`, `422`, `500`, `503` | Body `{"owner":"...","volume_id":"..."}`. Recreates a disabled iSCSI target from its stored definition and reuses the active credential. |
 | `GET` | `/api/certificates` | `200` | `500` | Lists regular `.crt`, `.key`, and `.pem` files in `admin_ui.client_cert_dir` and, separately, the public `listen.tls.client_ca_file` as `ca`. A missing/unsafe directory is reported in the body, not as a crash. |
+| `POST` | `/api/certificates` | `201` | `400`, `409`, `413`, `415`, `422`, `500`, `503` | Body `{"role":"admin"\|"caller","name":"..."}`. Signs a new client keypair with the configured client CA, writes `<role>-<name>.crt` and `.key` into `admin_ui.client_cert_dir`, and returns download metadata. Never overwrites existing files and never serves the CA private key. |
 | `GET` | `/api/certificates/{name}` | `200` | `404`, `405` | Downloads one allowed file with `Content-Disposition: attachment`. Path traversal, symlinks, and non-allowlisted names are `404`. |
 | `GET` | `/api/ca` | `200` | `404`, `405` | Downloads `listen.tls.client_ca_file` (the public CA certificate only; the CA private key is never served). |
 
@@ -2439,10 +2446,12 @@ modified is listed. Phase checkpoints are included.
 *   **Type / Scope**: Client certificate browser.
 *   **Proposed Changes**: Fetch `/api/certificates`; show directory, file name,
     kind, role, size, modification time, and a download link. Provide a separate
-    “Download client CA” link from the same response's `ca` field. Warn when
-    private keys are present. The server restricts files to the configured
-    client certificate directory and rejects symlinks, sensitive CA/server
-    names, and path traversal.
+    “Download client CA” link from the same response's `ca` field. Add a
+    “Create certificate” form with role (`admin`/`caller`) and name; POST to
+    `/api/certificates`, then refresh the list. Warn when private keys are
+    present. The server restricts files to the configured client certificate
+    directory and rejects symlinks, sensitive CA/server names, and path
+    traversal.
 
 **Phase 6: Process wiring and build**
 

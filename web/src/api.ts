@@ -1,6 +1,7 @@
 import {
   ApiError,
   type CertificatesResponse,
+  type CreateCertificateResponse,
   type ClassListResponse,
   type ConfigResponse,
   type RegisterVGResponse,
@@ -115,6 +116,15 @@ export async function enableISCSITarget(owner: string, volumeID: string): Promis
 export async function getCertificates(): Promise<CertificatesResponse> {
   const response = await fetch("/api/certificates", { headers: { Accept: "application/json" } });
   return parseResponse<CertificatesResponse>(response);
+}
+
+export async function createCertificate(role: "admin" | "caller", name: string): Promise<CreateCertificateResponse> {
+  const response = await fetch("/api/certificates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role, name }),
+  });
+  return parseResponse<CreateCertificateResponse>(response);
 }
 
 export function certificateDownloadURL(name: string): string {

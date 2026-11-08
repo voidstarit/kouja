@@ -25,6 +25,9 @@ admin_ui:
   # Directory containing client certificates/keys exposed for download by the
   # local admin UI. Only this directory is served, never the CA or server keys.
   client_cert_dir: /etc/kouja/tls/clients
+  # Optional CA private key used only to issue new client/admin certificates
+  # from the local UI. Keep it root-owned at 0600; it is never downloadable.
+  client_ca_key_file: /etc/kouja/tls/ca.key
 
 storage:
   headroom_percent: 5
