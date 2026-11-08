@@ -36,6 +36,7 @@ admin_ui:
   enabled: false
   address: 127.0.0.1:9444
   client_cert_dir: /etc/kouja/tls/clients
+  client_ca_key_file: /etc/kouja/tls/ca.key
 storage:
   headroom_percent: 5
   headroom_min_bytes: 1073741824

@@ -178,6 +178,7 @@ admin_ui:
   enabled: true
   address: 127.0.0.1:9444
   client_cert_dir: /etc/kouja/tls/clients
+  client_ca_key_file: /etc/kouja/tls/ca.key
 ```
 
 Restart the agent once, then open `http://127.0.0.1:9444`. The listener is
@@ -215,6 +216,13 @@ server private key are never exposed. The public client CA
 **Configuration → Client certificates → Download client CA** or directly at
 `GET /api/ca`. The list includes client private keys, so keep that directory
 root-owned at `0700` and treat downloads as sensitive.
+
+The same panel can issue a new **client (caller)** or **admin** certificate.
+It signs a new client keypair with the configured client CA private key
+(`admin_ui.client_ca_key_file`, default `<directory of client_ca_file>/ca.key`),
+writes the `.crt` and `.key` files into `client_cert_dir`, and leaves both
+available for download. The CA private key must be root-owned at `0600` (or
+stricter); it is never listed or served. Existing files are never overwritten.
 `.bak` is the immediate pre-save copy; `.last-good` is the startup
 configuration that last reached readiness. Live class changes may need to be
 reapplied after a failed-start recovery.

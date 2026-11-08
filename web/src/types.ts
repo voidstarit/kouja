@@ -311,6 +311,11 @@ export interface CertificatesResponse {
   error: string;
 }
 
+export interface CreateCertificateResponse {
+  certificate: CertificateFile;
+  private_key: CertificateFile;
+}
+
 export interface StatusPageProps {
   status: StatusResponse | null;
   loading: boolean;

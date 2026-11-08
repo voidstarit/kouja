@@ -33,9 +33,10 @@ type Config struct {
 
 // AdminUIConfig configures the optional loopback-only local administration UI.
 type AdminUIConfig struct {
-	Enabled       bool   `yaml:"enabled"`
-	Address       string `yaml:"address"`
-	ClientCertDir string `yaml:"client_cert_dir"`
+	Enabled         bool   `yaml:"enabled"`
+	Address         string `yaml:"address"`
+	ClientCertDir   string `yaml:"client_cert_dir"`
+	ClientCAKeyFile string `yaml:"client_ca_key_file"`
 }
 
 type ListenConfig struct {
@@ -251,6 +252,9 @@ func (cfg *Config) applyDefaults() {
 	if cfg.AdminUI.ClientCertDir == "" {
 		cfg.AdminUI.ClientCertDir = filepath.Join(filepath.Dir(cfg.Listen.TLS.CertFile), "clients")
 	}
+	if cfg.AdminUI.ClientCAKeyFile == "" && cfg.Listen.TLS.ClientCAFile != "" {
+		cfg.AdminUI.ClientCAKeyFile = filepath.Join(filepath.Dir(cfg.Listen.TLS.ClientCAFile), "ca.key")
+	}
 	for _, action := range []string{"create", "export", "delete", "resize"} {
 		if cfg.Operations.StepTimeoutSecs == nil {
 			cfg.Operations.StepTimeoutSecs = make(map[string]int)
@@ -288,6 +292,11 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.AdminUI.ClientCertDir != "" {
 		if err := requireAbsolute("admin_ui.client_cert_dir", cfg.AdminUI.ClientCertDir); err != nil {
+			return err
+		}
+	}
+	if cfg.AdminUI.ClientCAKeyFile != "" {
+		if err := requireAbsolute("admin_ui.client_ca_key_file", cfg.AdminUI.ClientCAKeyFile); err != nil {
 			return err
 		}
 	}

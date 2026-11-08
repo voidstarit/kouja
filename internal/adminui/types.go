@@ -301,3 +301,8 @@ type CertificatesResponse struct {
 	CA        *CertificateFile  `json:"ca"`
 	Error     string            `json:"error"`
 }
+
+type CreateCertificateResponse struct {
+	Certificate CertificateFile `json:"certificate"`
+	PrivateKey  CertificateFile `json:"private_key"`
+}
