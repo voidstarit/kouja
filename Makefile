@@ -5,6 +5,10 @@ UI_DIR ?= web
 BIN_DIR ?= bin
 CONTROLLER_GEN ?= controller-gen
 COVERAGE_OUT ?= coverage.out
+# Runtime files such as bin/clients may live under the repository root. Go's
+# ./... wildcard walks those directories too, so local build and test commands
+# use explicit source package roots instead.
+GO_PACKAGES ?= ./api/... ./cmd/... ./gen/... ./hack/... ./internal/... ./test/...
 
 .PHONY: all binaries build build-go ui clean-assets test test-bdd lint proto generate tools integration e2e fault perf upgrade coverage coverage-check csi-sanity phase0
 
@@ -20,12 +24,12 @@ binaries: build
 	install -m 0755 deploy/kouja-init.sh $(BIN_DIR)/kouja-init.sh
 
 build: ui
-	$(GO) build ./...
+	$(GO) build $(GO_PACKAGES)
 
 # Node-free build. Clean generated assets first so a previous full build does
 # not accidentally embed the browser bundle.
 build-go: clean-assets
-	$(GO) build ./...
+	$(GO) build $(GO_PACKAGES)
 
 ui: clean-assets
 	cd $(UI_DIR) && $(NPM) ci
@@ -37,15 +41,15 @@ clean-assets:
 		! -name .gitkeep ! -name .gitignore -exec rm -rf {} +
 
 test:
-	$(GO) test -tags=unit ./...
+	$(GO) test -tags=unit $(GO_PACKAGES)
 
 test-bdd:
 	$(GO) test -v ./test/bdd
 
 lint:
 	bash -n deploy/kouja-init.sh deploy/install/install.sh
-	$(GO) vet ./...
-	golangci-lint run
+	$(GO) vet $(GO_PACKAGES)
+	golangci-lint run $(GO_PACKAGES)
 
 proto:
 	$(BUF) lint
@@ -82,7 +86,7 @@ upgrade:
 	$(GO) test -tags=upgrade ./test/upgrade/...
 
 coverage:
-	$(GO) test -tags=unit -coverprofile=$(COVERAGE_OUT) ./...
+	$(GO) test -tags=unit -coverprofile=$(COVERAGE_OUT) $(GO_PACKAGES)
 	$(GO) tool cover -func=$(COVERAGE_OUT)
 
 coverage-check:
