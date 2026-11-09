@@ -23,6 +23,7 @@ all: binaries
 binaries: build
 	mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 $(GO) build -trimpath -o $(BIN_DIR)/kouja-agent ./cmd/kouja-agent
+	CGO_ENABLED=0 $(GO) build -trimpath -o $(BIN_DIR)/kouja-backup ./cmd/kouja-backup
 	CGO_ENABLED=0 $(GO) build -trimpath -o $(BIN_DIR)/kouja-csi-controller ./cmd/kouja-csi-controller
 	CGO_ENABLED=0 $(GO) build -trimpath -o $(BIN_DIR)/kouja-csi-node ./cmd/kouja-csi-node
 	CGO_ENABLED=0 $(GO) build -trimpath -o $(BIN_DIR)/kouja-restore ./cmd/kouja-restore

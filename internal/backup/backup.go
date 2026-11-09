@@ -30,6 +30,13 @@ type JournalSnapshotter interface {
 	SnapshotJournal(ctx context.Context, destination string) error
 }
 
+// DatabaseSnapshotter writes a consistent database snapshot. *state.Store is
+// used by the agent, while the standalone backup worker uses a read-only
+// state.SnapshotSource.
+type DatabaseSnapshotter interface {
+	Snapshot(ctx context.Context, destination string) error
+}
+
 type Options struct {
 	TargetDir          string
 	HostIDFile         string
@@ -48,8 +55,8 @@ type Options struct {
 }
 
 type Manager struct {
-	store *state.Store
-	opts  Options
+	snapshotter DatabaseSnapshotter
+	opts        Options
 }
 
 type Result struct {
@@ -88,9 +95,9 @@ type fileRecord struct {
 	SHA256 string `json:"sha256"`
 }
 
-func New(store *state.Store, opts Options) (*Manager, error) {
-	if store == nil {
-		return nil, fmt.Errorf("%w: state store is required", ErrInvalid)
+func New(snapshotter DatabaseSnapshotter, opts Options) (*Manager, error) {
+	if snapshotter == nil {
+		return nil, fmt.Errorf("%w: database snapshotter is required", ErrInvalid)
 	}
 	if opts.TargetDir == "" || !filepath.IsAbs(opts.TargetDir) {
 		return nil, fmt.Errorf("%w: target_dir must be an absolute path", ErrInvalid)
@@ -134,7 +141,7 @@ func New(store *state.Store, opts Options) (*Manager, error) {
 			opts.S3Uploader = uploader
 		}
 	}
-	return &Manager{store: store, opts: opts}, nil
+	return &Manager{snapshotter: snapshotter, opts: opts}, nil
 }
 
 func (manager *Manager) Run(ctx context.Context) (Result, error) {
@@ -174,7 +181,7 @@ func (manager *Manager) Run(ctx context.Context) (Result, error) {
 	if err := os.Remove(tempPath); err != nil {
 		return Result{}, fmt.Errorf("backup: prepare temporary database: %w", err)
 	}
-	if err := manager.store.Backup(ctx, tempPath); err != nil {
+	if err := manager.snapshotter.Snapshot(ctx, tempPath); err != nil {
 		_ = os.Remove(tempPath)
 		return Result{}, err
 	}

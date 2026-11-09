@@ -3,6 +3,9 @@ set -euo pipefail
 
 BIN_SRC="${1:-bin/kouja-agent}"
 BIN_DST=/usr/local/bin/kouja-agent
+BIN_DIR="$(dirname "$BIN_SRC")"
+BACKUP_BIN="${KOUJA_BACKUP_BIN:-$BIN_DIR/kouja-backup}"
+RESTORE_BIN="${KOUJA_RESTORE_BIN:-$BIN_DIR/kouja-restore}"
 CONFIG_DIR=/etc/kouja
 DATA_DIR=/var/lib/kouja
 ISCSI_ADDR="${KOUJA_ISCSI_ADDR:-0.0.0.0}"
@@ -17,6 +20,14 @@ fi
 install -D -m 0755 "$BIN_SRC" "$BIN_DST"
 install -D -m 0644 deploy/systemd/kouja-agent.service /etc/systemd/system/kouja-agent.service
 install -D -m 0644 deploy/systemd/kouja-agent.conf /etc/tmpfiles.d/kouja-agent.conf
+if [ -x "$BACKUP_BIN" ]; then
+  install -D -m 0755 "$BACKUP_BIN" /usr/local/bin/kouja-backup
+  install -D -m 0644 deploy/systemd/kouja-backup.service /etc/systemd/system/kouja-backup.service
+  install -D -m 0644 deploy/systemd/kouja-backup.timer /etc/systemd/system/kouja-backup.timer
+fi
+if [ -x "$RESTORE_BIN" ]; then
+  install -D -m 0755 "$RESTORE_BIN" /usr/local/bin/kouja-restore
+fi
 install -d -m 0700 "$CONFIG_DIR" "$CONFIG_DIR/tls" "$DATA_DIR" "$DATA_DIR/backups"
 
 if [ ! -f "$CONFIG_DIR/config.yaml" ]; then
@@ -85,6 +96,9 @@ rm -f /etc/target/saveconfig.json
 systemd-tmpfiles --create /etc/tmpfiles.d/kouja-agent.conf
 systemctl daemon-reload
 systemctl enable --now kouja-agent.service
+if [ -x "$BACKUP_BIN" ]; then
+  systemctl enable --now kouja-backup.timer
+fi
 
 cat <<'EOF'
 kouja is installed.
@@ -93,6 +107,6 @@ The optional admin_ui listener is disabled. If enabled, it is loopback-only
 and has no authentication; any local process that can reach it is
 root-equivalent. Do not proxy or port-forward it and use it only on a
 single-administrator host.
-Uninstall: systemctl disable --now kouja-agent; rm -f /etc/systemd/system/kouja-agent.service /etc/tmpfiles.d/kouja-agent.conf /usr/local/bin/kouja-agent.
+Uninstall: systemctl disable --now kouja-agent kouja-backup.timer; rm -f /etc/systemd/system/kouja-agent.service /etc/systemd/system/kouja-backup.service /etc/systemd/system/kouja-backup.timer /etc/tmpfiles.d/kouja-agent.conf /usr/local/bin/kouja-agent /usr/local/bin/kouja-backup /usr/local/bin/kouja-restore.
 Data volumes are not deleted by uninstall.
 EOF

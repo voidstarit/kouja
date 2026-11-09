@@ -160,7 +160,7 @@ internal/auth/              mTLS identity and role mapping
 internal/observability/     metrics, structured logs, readiness
 internal/config/            YAML configuration
 internal/csi/               CSI controller, node, inventory, and client
-deploy/systemd/             agent unit and tmpfiles
+deploy/systemd/             agent, backup, and tmpfiles units
 deploy/kubernetes/          CSIDriver, RBAC, controller, node, StorageClass
 ```
 
@@ -854,7 +854,7 @@ state:
 
 The admin API registers VGs at runtime. The `storage.vgs` list seeds VGs on first start only. After first start, the admin API is authoritative; a config entry that differs is a warning, not a fatal error. A configured VG that no longer exists marks its volumes `drift`. Portal changes require an agent restart in the first version. The backup retention keys control the 15-minute, daily, and weekly backup tiers.
 
-The backup job requires `backup_target` to be a writable off-host mount path. It writes `VACUUM INTO` to a temporary file, fsyncs it, and atomically renames it into the target. It validates the target before each run and exposes last-success and failure metrics.
+The standalone `kouja-backup` worker requires `backup_target` to be a writable off-host mount path. It opens the live database read-only, writes `VACUUM INTO` to a temporary file, fsyncs it, and atomically renames it into the target. It validates the target before each run and is scheduled by `kouja-backup.timer` rather than running inside the agent.
 
 ### Failure handling summary
 
@@ -1612,6 +1612,7 @@ service AdminService {
 | `deploy/kubernetes/csidriver.yaml` | `attachRequired: true`, `podInfoOnMount: true`, `volumeLifecycleModes: [Persistent]`, `fsGroupPolicy: None`, `requiresRepublish: false`. |
 | `deploy/systemd/kouja-agent.service` | `ExecStart=/usr/local/bin/kouja-agent --config /etc/kouja/config.yaml`, `Restart=on-failure`, `LimitNOFILE=1048576`, `After=network-online.target`, `Wants=network-online.target`, `User=root`, and `[Install] WantedBy=multi-user.target`. |
 | `deploy/systemd/kouja-agent.conf` | Installed as `/etc/tmpfiles.d/kouja-agent.conf`; creates `/var/lib/kouja` 0700 root:root and `/var/lib/kouja/backups` 0700 root:root. |
+| `deploy/systemd/kouja-backup.service` and `.timer` | Run the standalone read-only backup worker every 15 minutes; the timer is enabled by the installer. |
 | `deploy/install/install.sh` | Installs the binary at `/usr/local/bin/kouja-agent`, config at `/etc/kouja/config.yaml`, TLS material at `/etc/kouja/tls` (directory 0700, files 0600), the systemd unit, and tmpfiles; disables `target.service` and `targetcli saveconfig`; creates the data and backup directories; enables and starts the service; applies firewall rules; prints an uninstall procedure. |
 
 Sidecar arguments:

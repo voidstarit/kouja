@@ -17,7 +17,6 @@ import (
 	"github.com/voidstarit/kouja/internal/adminui"
 	"github.com/voidstarit/kouja/internal/agent"
 	"github.com/voidstarit/kouja/internal/audit"
-	"github.com/voidstarit/kouja/internal/backup"
 	"github.com/voidstarit/kouja/internal/config"
 	"github.com/voidstarit/kouja/internal/credential"
 	"github.com/voidstarit/kouja/internal/hostid"
@@ -48,7 +47,7 @@ func run() error {
 	checkConfig := flag.Bool("check-config", false, "validate the configuration and exit")
 	flag.Parse()
 
-	cfg, configData, err := config.LoadWithData(*configPath)
+	cfg, configData, err := config.LoadCoreWithData(*configPath)
 	if err != nil {
 		return err
 	}
@@ -61,9 +60,6 @@ func run() error {
 
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		return fmt.Errorf("create data directory: %w", err)
-	}
-	if err := os.MkdirAll(cfg.State.BackupDir, 0o700); err != nil {
-		return fmt.Errorf("create local backup directory: %w", err)
 	}
 	if err := agent.CheckDependencies(context.Background(), cfg); err != nil {
 		return err
@@ -193,8 +189,6 @@ func run() error {
 			logger.Error("certificate cleanup stopped", "error", err)
 		}
 	}()
-	backupDone := make(chan struct{})
-	go runBackups(ctx, store, cfg, *configPath, logger, backupDone, pkiService)
 	reconciler := agent.NewReconciler(store, lvmBackend, map[string]target.Exporter{
 		"iscsi": iscsi, "nvme-tcp": nvme,
 	}, time.Duration(cfg.State.ReconcileIntervalSeconds)*time.Second)
@@ -233,7 +227,6 @@ func run() error {
 		shutdownAdmin()
 		server.GracefulStop()
 		<-reconcileDone
-		<-backupDone
 		<-certDone
 		return nil
 	case err := <-serveErr:
@@ -241,7 +234,6 @@ func run() error {
 		shutdownAdmin()
 		server.Stop()
 		<-reconcileDone
-		<-backupDone
 		<-certDone
 		if err != nil && !errors.Is(err, context.Canceled) {
 			return err
@@ -272,74 +264,4 @@ func acquireLock(path string) (*os.File, error) {
 		return nil, fmt.Errorf("another agent instance holds %s: %w", path, err)
 	}
 	return file, nil
-}
-
-func runBackups(ctx context.Context, store *state.Store, cfg *config.Config, configPath string, logger *slog.Logger, done chan<- struct{}, snapshotter backup.JournalSnapshotter) {
-	defer close(done)
-	targetDir := cfg.State.BackupTarget
-	if targetDir == "" {
-		targetDir = cfg.State.BackupDir
-	}
-	if targetDir == "" {
-		logger.Warn("backup target is not configured; backups are disabled")
-		return
-	}
-	archiveFiles := map[string]string{
-		"config.yaml":       configPath,
-		"emergency.log":     cfg.EmergencyLog,
-		"tls/server.crt":    cfg.Listen.TLS.CertFile,
-		"tls/server.key":    cfg.Listen.TLS.KeyFile,
-		"tls/client-ca.crt": cfg.Listen.TLS.ClientCAFile,
-		"ca/ca.key":         cfg.CertificateAuthority.KeyFile,
-	}
-	archiveDirs := map[string]string{}
-	if cfg.CertificateAuthority.CertificateDir != "" {
-		archiveDirs["certificates"] = cfg.CertificateAuthority.CertificateDir
-	}
-	var s3Options *backup.S3Options
-	if cfg.State.S3Backup.Enabled {
-		s3Options = &backup.S3Options{
-			Bucket: cfg.State.S3Backup.Bucket, Prefix: cfg.State.S3Backup.Prefix,
-			Region: cfg.State.S3Backup.Region, Endpoint: cfg.State.S3Backup.Endpoint,
-			ForcePathStyle:       cfg.State.S3Backup.ForcePathStyle,
-			ServerSideEncryption: cfg.State.S3Backup.ServerSideEncryption,
-			KMSKeyID:             cfg.State.S3Backup.KMSKeyID,
-			PerBackupFolder:      cfg.State.S3Backup.PerBackupFolder,
-			RetentionDays:        cfg.State.S3Backup.RetentionDays,
-		}
-	}
-	manager, err := backup.New(store, backup.Options{
-		TargetDir:          targetDir,
-		HostIDFile:         cfg.HostIDFile,
-		SecretKeyFile:      cfg.SecretKeyFile,
-		RetentionShort:     cfg.State.BackupRetentionShort,
-		RetentionDaily:     cfg.State.BackupRetentionDaily,
-		RetentionWeekly:    cfg.State.BackupRetentionWeekly,
-		JournalSnapshotter: snapshotter,
-		RevocationLogName:  "revoked-serials.log",
-		ArchiveFiles:       archiveFiles,
-		ArchiveDirs:        archiveDirs,
-		EncryptionKeyFile:  cfg.State.S3Backup.EncryptionKeyFile,
-		S3:                 s3Options,
-	})
-	if err != nil {
-		logger.Error("backup configuration failed", "error", err)
-		return
-	}
-	run := func() {
-		if _, err := manager.Run(ctx); err != nil {
-			logger.Error("backup failed", "error", err)
-		}
-	}
-	run()
-	ticker := time.NewTicker(time.Duration(cfg.State.BackupIntervalSeconds) * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			run()
-		}
-	}
 }

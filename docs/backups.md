@@ -1,9 +1,9 @@
 # Backup and recovery
 
-kouja writes a consistent SQLite snapshot to local storage on the configured
-backup interval. When S3 is enabled, it uploads the full recovery set as
-individual files. The S3 set is not wrapped in an opaque archive, so operators
-can inspect and restore selected content directly.
+`kouja-backup` writes a consistent SQLite snapshot to local storage. When S3 is
+enabled, it uploads the full recovery set as individual files. The S3 set is
+not wrapped in an opaque archive, so operators can inspect and restore selected
+content directly.
 
 ## Backup contents
 
@@ -42,10 +42,11 @@ state:
 ```
 
 Credentials use the standard AWS default chain: environment variables, shared
-credentials, instance profile, IRSA, or another configured provider. The agent
-needs `s3:PutObject`, `s3:ListBucket`, and `s3:DeleteObject` for the configured
-bucket/prefix. The agent deletes backup objects older than `retention_days`
-itself; bucket lifecycle rules may be used as an additional safeguard.
+credentials, instance profile, IRSA, or another configured provider. The
+backup worker needs `s3:PutObject`, `s3:ListBucket`, and `s3:DeleteObject` for
+the configured bucket/prefix. It deletes backup objects older than
+`retention_days` itself; bucket lifecycle rules may be used as an additional
+safeguard.
 
 With `per_backup_folder: true`, each backup gets its own `YYYYMMMDDHHmm` folder:
 
@@ -69,6 +70,23 @@ The local staging directory is `state.backup_target` when set, otherwise
 `state.backup_dir`. The manifest is uploaded last, so a prefix without a
 `restore.json` or `*-restore.json` manifest is an incomplete backup and is not
 restored.
+
+## Scheduling
+
+The packaged systemd units run `kouja-backup` as a one-shot service from
+`kouja-backup.timer`. The shipped timer runs every 15 minutes, matching the
+default `state.backup_interval_seconds`. Adjust
+`/etc/systemd/system/kouja-backup.timer` if you change the cadence, then run
+`systemctl daemon-reload` and restart the timer.
+
+Run a backup manually:
+
+```sh
+sudo kouja-backup --config /etc/kouja/config.yaml
+```
+
+The worker uses a read-only SQLite connection for `VACUUM INTO`; it does not
+open or migrate the agent database for writing.
 
 ## Encryption
 
@@ -148,6 +166,7 @@ highly sensitive:
 - Keep the bucket private and block public access.
 - Enable default encryption or provide a KMS key in addition to client-side
   encryption.
-- Restrict `s3:PutObject`/`s3:GetObject` to the agent and recovery roles.
+- Restrict `s3:PutObject`/`s3:GetObject` to the backup worker and recovery
+  roles.
 - Use HTTPS endpoints.
 - Rotate the CA and client credentials if a backup is exposed.

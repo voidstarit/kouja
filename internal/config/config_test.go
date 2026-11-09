@@ -214,3 +214,23 @@ func bddTestConfigValidationBranches(t testing.TB) {
 		t.Fatal("defaults were not applied")
 	}
 }
+
+func TestParseCoreDefersBackupValidation(t *testing.T) {
+	withInvalidBackup := validConfig + "\nstate:\n  backup_dir: relative-backup-dir\n  s3_backup:\n    enabled: true\n"
+	if _, err := Parse([]byte(withInvalidBackup)); err == nil {
+		t.Fatal("full parse accepted invalid backup configuration")
+	}
+	if _, err := ParseCore([]byte(withInvalidBackup)); err != nil {
+		t.Fatalf("core parse rejected backup-only configuration: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte(withInvalidBackup), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := LoadCoreWithData(path); err != nil {
+		t.Fatalf("LoadCoreWithData: %v", err)
+	}
+	if _, _, err := LoadCoreWithData(""); err == nil {
+		t.Fatal("empty core config path did not fail")
+	}
+}

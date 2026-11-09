@@ -3257,10 +3257,11 @@ audit methods the Phase 1 build must satisfy.
     its completion in the shutdown path. Only a
     `certificate_authority.key_file` or `certificate_dir` failure degrades
     issuance; a missing/invalid/expired `listen.tls.client_ca_file`, invalid
-    config, or unreadable state store/journal is a startup error. Change
-    `runBackups` to accept `backup.Options{JournalSnapshotter: pkiService,
-    RevocationLogName: "revoked-serials.log", ...}` and pass those options into
-    the goroutine; the source path stays in `certificate_authority` config.
+    config, or unreadable state store/journal is a startup error. Certificate
+    backup snapshots are handled by the separate `kouja-backup` worker, which
+    reads the revocation journal file and the database through a read-only
+    `state.SnapshotSource`; the source path stays in `certificate_authority`
+    config.
 *   **Rationale**: This is the composition root. A missing wiring line would
     leave the API or UI with a nil authority or would leave the revocation
     cache unused.

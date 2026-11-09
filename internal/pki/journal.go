@@ -222,3 +222,12 @@ func (s *Service) SnapshotJournal(ctx context.Context, destination string) error
 	}
 	return s.journal.snapshot(ctx, destination)
 }
+
+// SnapshotJournalFile copies a revocation journal without starting the PKI
+// service. It is used by the standalone backup worker.
+func SnapshotJournalFile(ctx context.Context, source, destination string) error {
+	if source == "" {
+		return ErrCAUnavailable
+	}
+	return (&journal{path: source, entries: make(map[string]journalEntry), healthy: true}).snapshot(ctx, destination)
+}

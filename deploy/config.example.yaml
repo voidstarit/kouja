@@ -76,9 +76,9 @@ admission:
 
 state:
   backup_dir: /var/lib/kouja/backups
-  # Set to an off-host writable mount for backups, or leave empty to disable.
+  # Set to an off-host writable mount for backups. Empty uses backup_dir.
   backup_target: ""
-  backup_interval_seconds: 900
+  backup_interval_seconds: 900   # keep in sync with kouja-backup.timer
   backup_retention_short: 96
   backup_retention_daily: 7
   backup_retention_weekly: 4

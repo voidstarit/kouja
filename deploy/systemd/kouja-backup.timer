@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodic kouja recovery backup
+
+[Timer]
+OnBootSec=5min
+# Keep in sync with state.backup_interval_seconds (900 seconds).
+OnUnitActiveSec=15min
+RandomizedDelaySec=30s
+Unit=kouja-backup.service
+
+[Install]
+WantedBy=timers.target

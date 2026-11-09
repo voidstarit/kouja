@@ -407,3 +407,18 @@ func TestIssueRevokeExternalAndJournalBranches(t *testing.T) {
 	}
 	service.recordFailed(context.Background(), Caller{}, "action", "id", "role", "name", errTest)
 }
+
+func TestSnapshotJournalFile(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "journal.log")
+	if err := os.WriteFile(source, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(dir, "snapshot")
+	if err := SnapshotJournalFile(context.Background(), source, destination); err != nil {
+		t.Fatal(err)
+	}
+	if err := SnapshotJournalFile(context.Background(), "", destination); err == nil {
+		t.Fatal("empty journal source did not fail")
+	}
+}
