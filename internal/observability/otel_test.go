@@ -157,3 +157,44 @@ func firstGaugeAttributes(t *testing.T, collected metricdata.ResourceMetrics, na
 	t.Fatalf("metric %s not found", name)
 	return attribute.NewSet()
 }
+
+func TestOTelResourceAndNoExportAttributes(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	reporter, err := newOTelWithReader(reader, OTelOptions{
+		ServiceName: "svc", ServiceVersion: "v1", HostUUID: "host",
+		Volumes: func(context.Context) ([]state.VolumeStatus, error) {
+			return []state.VolumeStatus{{Volume: state.Volume{Owner: "o", VolumeID: "v", LVName: "lv", VGName: "vg", RequestedSizeBytes: 1, State: "available"}}}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = reporter.Shutdown(context.Background()) }()
+	var collected metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &collected); err != nil {
+		t.Fatal(err)
+	}
+	if collected.Resource == nil {
+		t.Fatal("missing resource")
+	}
+	for key, want := range map[string]string{"service.name": "svc", "service.version": "v1", "service.instance.id": "host", "host.id": "host"} {
+		found := false
+		for _, value := range collected.Resource.Attributes() {
+			if string(value.Key) == key && value.Value.AsString() == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("resource attribute %s=%q missing", key, want)
+		}
+	}
+	metrics := collectGaugeMetrics(t, collected)
+	if metrics["kouja.lv.requested_bytes"] != 1 || metrics["kouja.lv.exported"] != 0 || metrics["kouja.lv.present"] != 0 {
+		t.Fatalf("metrics = %#v", metrics)
+	}
+	attributes := firstGaugeAttributes(t, collected, "kouja.lv.requested_bytes")
+	if got, ok := attributes.Value(attribute.Key("kouja.export_protocol")); ok {
+		t.Fatalf("unexpected export protocol %q", got.AsString())
+	}
+}
