@@ -14,6 +14,7 @@ import (
 	"github.com/voidstarit/kouja/internal/credential"
 	"github.com/voidstarit/kouja/internal/lvm"
 	"github.com/voidstarit/kouja/internal/operations"
+	"github.com/voidstarit/kouja/internal/pki"
 	"github.com/voidstarit/kouja/internal/state"
 	"github.com/voidstarit/kouja/internal/target"
 	"google.golang.org/grpc/codes"
@@ -37,6 +38,10 @@ type AdminService struct {
 	classRegistry ClassRegistry
 	vgs           VGService
 	vgClassGate   *sync.Mutex
+	issuer        pki.Issuer
+	registry      pki.Registry
+	external      pki.ExternalRevoker
+	files         pki.FileStore
 }
 
 type AdminOption func(*AdminService)
@@ -85,6 +90,15 @@ func WithVGClassGate(gate *sync.Mutex) AdminOption {
 	}
 }
 
+func WithCertificateService(issuer pki.Issuer, registry pki.Registry, external pki.ExternalRevoker, files pki.FileStore) AdminOption {
+	return func(service *AdminService) {
+		service.issuer = issuer
+		service.registry = registry
+		service.external = external
+		service.files = files
+	}
+}
+
 func NewAdminService(store *state.Store, lvmBackend lvm.Backend, options ...AdminOption) *AdminService {
 	service := &AdminService{
 		store: store, lvm: lvmBackend, exporters: make(map[string]target.Exporter),
@@ -112,7 +126,9 @@ func (service *AdminService) RegisterVG(ctx context.Context, request *koujav1.Re
 	if service.vgs == nil {
 		return nil, status.Error(codes.FailedPrecondition, "volume group service is not configured")
 	}
-	capacity, err := service.vgs.Register(ctx, request.GetVgName(), request.GetVgUuid(), true)
+	service.vgClassGate.Lock()
+	defer service.vgClassGate.Unlock()
+	capacity, err := service.vgs.Register(ctx, request.GetVgName(), request.GetVgUuid(), false)
 	if err != nil {
 		return nil, vgStatusError(err)
 	}

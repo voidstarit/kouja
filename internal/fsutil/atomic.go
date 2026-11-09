@@ -66,3 +66,51 @@ func WriteFileAtomic(path string, data []byte, mode fs.FileMode) error {
 	}
 	return nil
 }
+
+// WriteFileExclusiveAtomic creates path with O_EXCL, writes data, syncs the
+// file and its directory, and removes the partial file on failure. It returns
+// ErrDurabilityUncertain when the file is durable but the directory sync
+// failed.
+func WriteFileExclusiveAtomic(path string, data []byte, mode fs.FileMode) error {
+	if path == "" {
+		return fmt.Errorf("fsutil: empty destination path")
+	}
+	dir := filepath.Dir(path)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode) //nolint:gosec // caller validates the destination
+	if err != nil {
+		return fmt.Errorf("fsutil: create %s: %w", path, err)
+	}
+	cleanup := func() {
+		_ = file.Close()
+		_ = os.Remove(path)
+	}
+	if err := file.Chmod(mode); err != nil {
+		cleanup()
+		return fmt.Errorf("fsutil: chmod %s: %w", path, err)
+	}
+	if _, err := file.Write(data); err != nil {
+		cleanup()
+		return fmt.Errorf("fsutil: write %s: %w", path, err)
+	}
+	if err := file.Sync(); err != nil {
+		cleanup()
+		return fmt.Errorf("fsutil: sync %s: %w", path, err)
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(path)
+		return fmt.Errorf("fsutil: close %s: %w", path, err)
+	}
+	directory, err := os.Open(dir) //nolint:gosec // caller validates the destination
+	if err != nil {
+		return fmt.Errorf("%w: open directory: %v", ErrDurabilityUncertain, err)
+	}
+	syncErr := directory.Sync()
+	closeErr := directory.Close()
+	if syncErr != nil {
+		return fmt.Errorf("%w: %v", ErrDurabilityUncertain, syncErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("%w: close directory: %v", ErrDurabilityUncertain, closeErr)
+	}
+	return nil
+}
