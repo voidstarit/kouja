@@ -35,8 +35,14 @@ listen:
 admin_ui:
   enabled: false
   address: 127.0.0.1:9444
-  client_cert_dir: /etc/kouja/tls/clients
-  client_ca_key_file: /etc/kouja/tls/ca.key
+certificate_authority:
+  enabled: false
+  key_file: /etc/kouja/tls/ca.key
+  certificate_dir: /etc/kouja/tls/clients
+  revocation_log_file: /var/lib/kouja/revoked-serials.log
+  default_ttl_days: 30
+  max_ttl_days: 365
+  max_active_certificates: 1000
 storage:
   headroom_percent: 5
   headroom_min_bytes: 1073741824

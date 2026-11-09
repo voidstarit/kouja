@@ -308,8 +308,8 @@ func (server *Server) preflight(ctx context.Context, candidate *config.Config) [
 	if running.AdminUI.Address != candidate.AdminUI.Address && (running.AdminUI.Enabled || candidate.AdminUI.Enabled) {
 		add("admin_address_changed", "admin UI moves after the operator restarts the service")
 	}
-	if running.AdminUI.ClientCertDir != candidate.AdminUI.ClientCertDir {
-		add("admin_client_cert_dir_changed", "client certificate directory changes apply after the operator restarts the service")
+	if running.CertificateAuthority != candidate.CertificateAuthority {
+		add("certificate_authority_changed", "certificate authority changes apply after the operator restarts the service")
 	}
 	if running.Listen.Address != candidate.Listen.Address {
 		if err := probeAddress(candidate.Listen.Address); err != nil {

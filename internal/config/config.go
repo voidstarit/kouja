@@ -34,10 +34,8 @@ type Config struct {
 
 // AdminUIConfig configures the optional loopback-only local administration UI.
 type AdminUIConfig struct {
-	Enabled         bool   `yaml:"enabled"`
-	Address         string `yaml:"address"`
-	ClientCertDir   string `yaml:"client_cert_dir"`
-	ClientCAKeyFile string `yaml:"client_ca_key_file"`
+	Enabled bool   `yaml:"enabled"`
+	Address string `yaml:"address"`
 }
 
 // CertificateAuthorityConfig configures agent-issued client certificates.
@@ -268,12 +266,6 @@ func (cfg *Config) applyDefaults() {
 	if cfg.AdminUI.Address == "" {
 		cfg.AdminUI.Address = defaults.AdminUI.Address
 	}
-	if cfg.AdminUI.ClientCertDir == "" {
-		cfg.AdminUI.ClientCertDir = filepath.Join(filepath.Dir(cfg.Listen.TLS.CertFile), "clients")
-	}
-	if cfg.AdminUI.ClientCAKeyFile == "" && cfg.Listen.TLS.ClientCAFile != "" {
-		cfg.AdminUI.ClientCAKeyFile = filepath.Join(filepath.Dir(cfg.Listen.TLS.ClientCAFile), "ca.key")
-	}
 	if cfg.CertificateAuthority.KeyFile == "" && cfg.Listen.TLS.ClientCAFile != "" {
 		cfg.CertificateAuthority.KeyFile = filepath.Join(filepath.Dir(cfg.Listen.TLS.ClientCAFile), "ca.key")
 	}
@@ -315,16 +307,6 @@ func (cfg *Config) Validate() error {
 	}
 	if err := validateAdminUIAddress(cfg.AdminUI.Address); err != nil {
 		return err
-	}
-	if cfg.AdminUI.ClientCertDir != "" {
-		if err := requireAbsolute("admin_ui.client_cert_dir", cfg.AdminUI.ClientCertDir); err != nil {
-			return err
-		}
-	}
-	if cfg.AdminUI.ClientCAKeyFile != "" {
-		if err := requireAbsolute("admin_ui.client_ca_key_file", cfg.AdminUI.ClientCAKeyFile); err != nil {
-			return err
-		}
 	}
 	if cfg.Storage.HeadroomPercent < 0 || cfg.Storage.HeadroomPercent > 100 {
 		return fmt.Errorf("%w: storage.headroom_percent must be between 0 and 100", ErrInvalid)

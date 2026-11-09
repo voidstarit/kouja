@@ -168,6 +168,8 @@ func run() error {
 	adminServer := startAdminServer(cfg, adminui.Options{
 		ConfigPath: *configPath, Config: cfg, ConfigData: configData,
 		Store: store, Capacity: lvmBackend, VGs: vgManager, Classes: classMap,
+		Issuer: pkiService, Registry: pkiService, ExternalRevoker: pkiService,
+		Files: pkiService, CAStatus: pkiService,
 		Ready: ready.Load, HostUUID: hostUUID, AgentVersion: agentVersion,
 		APIVersion: apiVersion, StartedAt: time.Now(), Logger: logger, Metrics: metrics,
 		TargetMetrics: iscsi, DisableTarget: manager, EnableTarget: manager,
