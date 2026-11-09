@@ -43,6 +43,17 @@ func TestVolumeStatusQueries(t *testing.T) {
 	if len(statuses) != 1 {
 		t.Fatalf("statuses = %d", len(statuses))
 	}
+	var allStatuses []VolumeStatus
+	if err := store.Transact(context.Background(), func(tx Tx) error {
+		values, err := tx.ListVolumeStatusesAll()
+		allStatuses = values
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(allStatuses) != 1 || allStatuses[0].VolumeID != "vol1" {
+		t.Fatalf("all statuses = %#v", allStatuses)
+	}
 	status := statuses[0]
 	if status.Export == nil || status.Observation == nil || status.ExportObservation == nil {
 		t.Fatalf("missing joined rows: %#v", status)

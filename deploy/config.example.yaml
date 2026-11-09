@@ -73,6 +73,14 @@ admission:
   max_concurrent_operations: 64
   per_caller_operations: 10
   capacity_requests_per_second: 10
+observability:
+  otel:
+    enabled: false
+    endpoint: ""          # OTLP/gRPC host:port, e.g. otel-collector:4317
+    insecure: false       # true for a plaintext local collector
+    interval_seconds: 30
+    service_name: kouja-agent
+    headers: {}
 
 state:
   backup_dir: /var/lib/kouja/backups

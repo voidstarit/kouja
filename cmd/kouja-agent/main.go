@@ -182,6 +182,39 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	otelReporter, err := observability.NewOTel(ctx, observability.OTelOptions{
+		Enabled:        cfg.Observability.OTel.Enabled,
+		Endpoint:       cfg.Observability.OTel.Endpoint,
+		Insecure:       cfg.Observability.OTel.Insecure,
+		Headers:        cfg.Observability.OTel.Headers,
+		Interval:       time.Duration(cfg.Observability.OTel.IntervalSeconds) * time.Second,
+		ServiceName:    cfg.Observability.OTel.ServiceName,
+		ServiceVersion: agentVersion,
+		HostUUID:       hostUUID,
+		StorageClass:   classMap.ClassName,
+		Logger:         logger,
+		Volumes: func(ctx context.Context) ([]state.VolumeStatus, error) {
+			var statuses []state.VolumeStatus
+			err := store.Transact(ctx, func(tx state.Tx) error {
+				values, err := tx.ListVolumeStatusesAll()
+				statuses = values
+				return err
+			})
+			return statuses, err
+		},
+	})
+	if err != nil {
+		logger.Error("OpenTelemetry metrics disabled", "error", err)
+	}
+	if otelReporter != nil {
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := otelReporter.Shutdown(shutdownCtx); err != nil {
+				logger.Error("OpenTelemetry shutdown failed", "error", err)
+			}
+		}()
+	}
 	certDone := make(chan struct{})
 	go func() {
 		defer close(certDone)

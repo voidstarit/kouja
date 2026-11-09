@@ -313,6 +313,7 @@ type Tx interface {
 	GetVolumeByResourceUUID(resourceUUID string) (Volume, error)
 	ListVolumes(owner string, page Page) ([]Volume, error)
 	ListVolumeStatuses(limit int) ([]VolumeStatus, error)
+	ListVolumeStatusesAll() ([]VolumeStatus, error)
 	VolumeStateCounts() (map[string]int, error)
 	PutVolume(Volume) error
 	DeleteVolume(owner, volumeID string) error

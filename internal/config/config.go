@@ -29,6 +29,7 @@ type Config struct {
 	Targets              TargetsConfig              `yaml:"targets"`
 	Operations           OperationsConfig           `yaml:"operations"`
 	Admission            AdmissionConfig            `yaml:"admission"`
+	Observability        ObservabilityConfig        `yaml:"observability"`
 	State                StateConfig                `yaml:"state"`
 	CertificateAuthority CertificateAuthorityConfig `yaml:"certificate_authority"`
 }
@@ -139,6 +140,19 @@ type AdmissionConfig struct {
 	CapacityRequestsPerSec  int `yaml:"capacity_requests_per_second"`
 }
 
+type ObservabilityConfig struct {
+	OTel OTelConfig `yaml:"otel"`
+}
+
+type OTelConfig struct {
+	Enabled         bool              `yaml:"enabled"`
+	Endpoint        string            `yaml:"endpoint"`
+	Insecure        bool              `yaml:"insecure"`
+	Headers         map[string]string `yaml:"headers"`
+	IntervalSeconds int               `yaml:"interval_seconds"`
+	ServiceName     string            `yaml:"service_name"`
+}
+
 type StateConfig struct {
 	BackupDir                  string         `yaml:"backup_dir"`
 	BackupTarget               string         `yaml:"backup_target"`
@@ -221,6 +235,12 @@ func Default() Config {
 			MaxConcurrentOperations: 64,
 			PerCallerOperations:     10,
 			CapacityRequestsPerSec:  10,
+		},
+		Observability: ObservabilityConfig{
+			OTel: OTelConfig{
+				IntervalSeconds: 30,
+				ServiceName:     "kouja-agent",
+			},
 		},
 		State: StateConfig{
 			BackupDir:                  "/var/lib/kouja/backups",
@@ -346,6 +366,12 @@ func (cfg *Config) applyDefaults() {
 			cfg.Operations.StepTimeoutSecs[action] = defaults.Operations.StepTimeoutSecs[action]
 		}
 	}
+	if cfg.Observability.OTel.IntervalSeconds <= 0 {
+		cfg.Observability.OTel.IntervalSeconds = defaults.Observability.OTel.IntervalSeconds
+	}
+	if strings.TrimSpace(cfg.Observability.OTel.ServiceName) == "" {
+		cfg.Observability.OTel.ServiceName = defaults.Observability.OTel.ServiceName
+	}
 }
 
 func (cfg *Config) ValidateCore() error {
@@ -428,6 +454,20 @@ func (cfg *Config) ValidateCore() error {
 	}
 	if cfg.Admission.MaxConcurrentOperations <= 0 || cfg.Admission.PerCallerOperations <= 0 || cfg.Admission.CapacityRequestsPerSec <= 0 {
 		return fmt.Errorf("%w: admission values must be positive", ErrInvalid)
+	}
+	if cfg.Observability.OTel.Enabled {
+		if cfg.Observability.OTel.IntervalSeconds <= 0 {
+			return fmt.Errorf("%w: observability.otel.interval_seconds must be positive", ErrInvalid)
+		}
+		if strings.TrimSpace(cfg.Observability.OTel.ServiceName) == "" {
+			return fmt.Errorf("%w: observability.otel.service_name is required", ErrInvalid)
+		}
+		if cfg.Observability.OTel.Endpoint != "" {
+			host, port, err := net.SplitHostPort(cfg.Observability.OTel.Endpoint)
+			if err != nil || host == "" || port == "" {
+				return fmt.Errorf("%w: observability.otel.endpoint must be host:port", ErrInvalid)
+			}
+		}
 	}
 	if cfg.State.IntegrityCheckIntervalSecs <= 0 || cfg.State.ReconcileIntervalSeconds <= 0 ||
 		cfg.State.AuditRetentionDays <= 0 {

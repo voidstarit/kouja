@@ -234,3 +234,35 @@ func TestParseCoreDefersBackupValidation(t *testing.T) {
 		t.Fatal("empty core config path did not fail")
 	}
 }
+
+func TestObservabilityOTelConfig(t *testing.T) {
+	cfg, err := Parse([]byte(validConfig))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Observability.OTel.IntervalSeconds != 30 || cfg.Observability.OTel.ServiceName != "kouja-agent" {
+		t.Fatalf("OTel defaults = %#v", cfg.Observability.OTel)
+	}
+	withOTel := validConfig + `
+observability:
+  otel:
+    enabled: true
+    endpoint: otel-collector:4317
+    insecure: true
+    interval_seconds: 10
+    service_name: custom-agent
+    headers:
+      x-scope-orgid: kouja
+`
+	cfg, err = Parse([]byte(withOTel))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Observability.OTel.Enabled || cfg.Observability.OTel.Endpoint != "otel-collector:4317" ||
+		cfg.Observability.OTel.IntervalSeconds != 10 || cfg.Observability.OTel.Headers["x-scope-orgid"] != "kouja" {
+		t.Fatalf("OTel config = %#v", cfg.Observability.OTel)
+	}
+	if _, err := Parse([]byte(validConfig + "\nobservability:\n  otel:\n    enabled: true\n    endpoint: not-a-host-port\n")); err == nil {
+		t.Fatal("invalid OTel endpoint did not fail")
+	}
+}

@@ -26,6 +26,18 @@ const volumeStatusColumns = `v.owner, v.volume_id, v.resource_uuid, v.lv_name, v
 	x.owner, x.volume_id, x.target_present, x.namespace_present, x.acl_present,
 	x.active_sessions, x.session_state, x.observed_initiator, x.observed_at, x.source`
 
+const volumeStatusQuery = `
+	SELECT ` + volumeStatusColumns + `
+	FROM volumes v
+	LEFT JOIN exports e
+		ON e.owner = v.owner AND e.volume_id = v.volume_id
+	LEFT JOIN volume_observations o
+		ON o.owner = v.owner AND o.volume_id = v.volume_id
+	LEFT JOIN export_observations x
+		ON x.owner = v.owner AND x.volume_id = v.volume_id
+	WHERE v.state != 'deleted'
+	ORDER BY v.updated_at DESC, v.owner, v.volume_id`
+
 func (tx *sqlTx) ListVolumeStatuses(limit int) ([]VolumeStatus, error) {
 	if limit <= 0 {
 		limit = 256
@@ -33,24 +45,27 @@ func (tx *sqlTx) ListVolumeStatuses(limit int) ([]VolumeStatus, error) {
 	if limit > 256 {
 		limit = 256
 	}
-	rows, err := tx.tx.QueryContext(tx.ctx, `
-		SELECT `+volumeStatusColumns+`
-		FROM volumes v
-		LEFT JOIN exports e
-			ON e.owner = v.owner AND e.volume_id = v.volume_id
-		LEFT JOIN volume_observations o
-			ON o.owner = v.owner AND o.volume_id = v.volume_id
-		LEFT JOIN export_observations x
-			ON x.owner = v.owner AND x.volume_id = v.volume_id
-		WHERE v.state != 'deleted'
-		ORDER BY v.updated_at DESC, v.owner, v.volume_id
-		LIMIT ?`, limit)
+	rows, err := tx.tx.QueryContext(tx.ctx, volumeStatusQuery+" LIMIT ?", limit)
 	if err != nil {
 		return nil, mapError(err)
 	}
-	defer func() { _ = rows.Close() }()
+	return scanVolumeStatuses(rows, limit)
+}
 
-	statuses := make([]VolumeStatus, 0, limit)
+// ListVolumeStatusesAll returns every live volume status. It is used by the
+// per-volume OpenTelemetry metric callback; the admin UI keeps the bounded
+// ListVolumeStatuses view.
+func (tx *sqlTx) ListVolumeStatusesAll() ([]VolumeStatus, error) {
+	rows, err := tx.tx.QueryContext(tx.ctx, volumeStatusQuery)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return scanVolumeStatuses(rows, 256)
+}
+
+func scanVolumeStatuses(rows *sql.Rows, capacity int) ([]VolumeStatus, error) {
+	defer func() { _ = rows.Close() }()
+	statuses := make([]VolumeStatus, 0, capacity)
 	for rows.Next() {
 		status, err := scanVolumeStatus(rows)
 		if err != nil {
