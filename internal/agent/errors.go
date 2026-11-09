@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/voidstarit/kouja/internal/audit"
 	"github.com/voidstarit/kouja/internal/lvm"
 	"github.com/voidstarit/kouja/internal/operations"
+	"github.com/voidstarit/kouja/internal/pki"
 	"github.com/voidstarit/kouja/internal/state"
 	"github.com/voidstarit/kouja/internal/target"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
@@ -67,6 +69,28 @@ func statusError(err error) error {
 			code, reason = codes.DeadlineExceeded, "DEADLINE_EXCEEDED"
 		case errors.Is(err, operations.ErrInvalidRequest), errors.Is(err, operations.ErrUnsupportedAction):
 			code, reason = codes.InvalidArgument, "INVALID_ARGUMENT"
+		case errors.Is(err, pki.ErrDisabled):
+			code, reason = codes.FailedPrecondition, "CERTIFICATE_ISSUANCE_DISABLED"
+		case errors.Is(err, pki.ErrCAUnavailable):
+			code, reason = codes.FailedPrecondition, "CERTIFICATE_CA_UNAVAILABLE"
+		case errors.Is(err, pki.ErrInvalidRole):
+			code, reason = codes.InvalidArgument, "CERTIFICATE_ROLE_INVALID"
+		case errors.Is(err, pki.ErrInvalidName):
+			code, reason = codes.InvalidArgument, "CERTIFICATE_NAME_INVALID"
+		case errors.Is(err, pki.ErrInvalidTTL):
+			code, reason = codes.InvalidArgument, "CERTIFICATE_TTL_INVALID"
+		case errors.Is(err, pki.ErrInvalidSerial):
+			code, reason = codes.InvalidArgument, "CERTIFICATE_SERIAL_INVALID"
+		case errors.Is(err, pki.ErrExternalInvalid):
+			code, reason = codes.InvalidArgument, "CERTIFICATE_EXTERNAL_INVALID"
+		case errors.Is(err, pki.ErrQuotaExceeded):
+			code, reason = codes.ResourceExhausted, "CERTIFICATE_QUOTA_EXCEEDED"
+		case errors.Is(err, pki.ErrJournalUnhealthy):
+			code, reason = codes.FailedPrecondition, "JOURNAL_UNAVAILABLE"
+		case errors.Is(err, pki.ErrFile), errors.Is(err, pki.ErrUnsafeDirectory):
+			code, reason = codes.Internal, "CERTIFICATE_FILE_ERROR"
+		case errors.Is(err, audit.ErrWrite):
+			code, reason = codes.Internal, "AUDIT_WRITE_FAILED"
 		case errors.Is(err, target.ErrSessionActive):
 			code, reason = codes.FailedPrecondition, "SESSION_ACTIVE"
 		case errors.Is(err, target.ErrSessionUnknown):

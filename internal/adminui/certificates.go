@@ -3,108 +3,200 @@ package adminui
 import (
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"mime"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
-	"sort"
 	"strings"
+
+	"github.com/voidstarit/kouja/internal/pki"
 )
 
-var certificateFilePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*\.(crt|key|pem)$`)
-
-var sensitiveCertificateNames = map[string]struct{}{
-	"ca.crt": {}, "ca.key": {}, "ca.srl": {},
-	"server.crt": {}, "server.key": {},
-	"client-ca.crt": {},
-}
-
-func allowedCertificateName(name string) bool {
-	if !certificateFilePattern.MatchString(name) || filepath.Base(name) != name {
-		return false
-	}
-	_, sensitive := sensitiveCertificateNames[strings.ToLower(name)]
-	return !sensitive
-}
-
-func (server *Server) clientCertDir() string {
-	if dir := strings.TrimSpace(server.options.Config.AdminUI.ClientCertDir); dir != "" {
-		return dir
-	}
-	certFile := server.options.Config.Listen.TLS.CertFile
-	if certFile == "" {
-		return ""
-	}
-	return filepath.Join(filepath.Dir(certFile), "clients")
-}
-
-func (server *Server) handleListCertificates(response http.ResponseWriter, _ *http.Request) {
-	dir := server.clientCertDir()
-	result := CertificatesResponse{Directory: dir, Files: []CertificateFile{}, CA: server.clientCA()}
-	if dir == "" {
-		result.Error = "client certificate directory is not configured"
-		writeJSON(response, http.StatusOK, result)
+func (server *Server) handleListCertificates(response http.ResponseWriter, request *http.Request) {
+	if server.options.Registry == nil || server.options.Files == nil {
+		writeAPIError(response, http.StatusServiceUnavailable, "unavailable", "certificate registry is not configured")
 		return
 	}
-	info, err := os.Lstat(dir)
+	files, err := server.options.Files.ListFiles(request.Context())
 	if err != nil {
-		if os.IsNotExist(err) {
-			result.Error = "client certificate directory does not exist"
-		} else {
+		writePKIError(response, err)
+		return
+	}
+	bySerial := make(map[string]pki.FileInfo, len(files))
+	for _, file := range files {
+		if file.Kind == "certificate" {
+			bySerial[file.SerialNumber] = file
+		}
+	}
+	result := CertificatesResponse{
+		IssuanceEnabled: server.options.Config.CertificateAuthority.Enabled && server.options.CAStatus != nil && server.options.CAStatus.Ready(),
+		DefaultTTLDays:  server.options.Config.CertificateAuthority.DefaultTTLDays,
+		MaxTTLDays:      server.options.Config.CertificateAuthority.MaxTTLDays,
+		Certificates:    []CertificateFile{},
+		CA:              server.clientCA(),
+	}
+	if server.options.CAStatus != nil {
+		if err := server.options.CAStatus.CAState(); err != nil {
 			result.Error = err.Error()
 		}
-		writeJSON(response, http.StatusOK, result)
-		return
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		result.Error = "client certificate directory is not a regular directory"
-		writeJSON(response, http.StatusOK, result)
-		return
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		result.Error = err.Error()
-		writeJSON(response, http.StatusOK, result)
-		return
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
-			continue
+	token := ""
+	for {
+		page, err := server.options.Registry.List(request.Context(), pki.ListOptions{PageSize: 100, PageToken: token})
+		if err != nil {
+			writePKIError(response, err)
+			return
 		}
-		name := entry.Name()
-		if !allowedCertificateName(name) {
-			continue
-		}
-		filePath := filepath.Join(dir, name)
-		if server.isClientCAKey(filePath) {
-			continue
-		}
-		fileInfo, err := entry.Info()
-		if err != nil || !fileInfo.Mode().IsRegular() {
-			continue
-		}
-		kind := "certificate"
-		if strings.HasSuffix(name, ".key") {
-			kind = "private_key"
-		}
-		role := roleFromCertificateName(name)
-		if kind == "certificate" {
-			if parsedRole := roleFromCertificate(filePath); parsedRole != "" {
-				role = parsedRole
+		for _, summary := range page.Certificates {
+			file := bySerial[summary.SerialNumber]
+			row := CertificateFile{
+				CertificateName: summary.Name,
+				SerialNumber:    summary.SerialNumber, Role: summary.Role, Kind: "certificate",
+				NotAfter: formatTime(summary.NotAfter), Revoked: summary.Revoked,
+				DownloadURL: "/api/certificates/" + url.PathEscape(file.Name),
 			}
+			if summary.RevokedAt != nil {
+				row.RevokedAt = formatTime(*summary.RevokedAt)
+			}
+			if file.Name != "" {
+				row.Name = file.Name
+				row.SizeBytes = file.SizeBytes
+				row.ModifiedAt = formatTime(file.ModifiedAt)
+			}
+			if keyName := strings.TrimSuffix(file.Name, ".crt") + ".key"; file.Name != "" {
+				row.KeyDownloadURL = "/api/certificates/" + url.PathEscape(keyName)
+			}
+			result.Certificates = append(result.Certificates, row)
 		}
-		result.Files = append(result.Files, CertificateFile{
-			Name: name, Kind: kind, Role: role, SizeBytes: fileInfo.Size(),
-			ModifiedAt:  formatTime(fileInfo.ModTime()),
-			DownloadURL: "/api/certificates/" + url.PathEscape(name),
-		})
+		if page.NextPageToken == "" {
+			break
+		}
+		token = page.NextPageToken
 	}
-	sort.Slice(result.Files, func(left, right int) bool {
-		return result.Files[left].Name < result.Files[right].Name
-	})
+	result.Files = result.Certificates
 	writeJSON(response, http.StatusOK, result)
+}
+
+func (server *Server) handleRevokeCertificate(response http.ResponseWriter, request *http.Request) {
+	if server.options.Registry == nil {
+		writeAPIError(response, http.StatusServiceUnavailable, "unavailable", "certificate registry is not configured")
+		return
+	}
+	serial := strings.TrimPrefix(request.URL.Path, "/api/certificates/")
+	if serial == "" || strings.Contains(serial, "/") {
+		writeAPIError(response, http.StatusBadRequest, "invalid_request", "serial number is required")
+		return
+	}
+	record, verdicts, err := server.options.Registry.Revoke(request.Context(), pki.Caller{
+		Owner: "local-admin", Source: "admin-ui", RemoteAddr: request.RemoteAddr,
+	}, serial, "admin-ui")
+	if err != nil {
+		writePKIError(response, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, RevokeCertificateResponse{
+		Certificate: CertificateFile{
+			Name: filepath.Base(record.CertFile), CertificateName: record.Name,
+			SerialNumber: record.SerialNumber, Role: record.Role, Kind: "certificate",
+			NotAfter: formatTime(record.NotAfter),
+			Revoked:  record.Revoked, DownloadURL: "/api/certificates/" + url.PathEscape(filepath.Base(record.CertFile)),
+		},
+		Warnings: warningsView(verdicts),
+	})
+}
+
+func (server *Server) handleRevokeExternalCertificate(response http.ResponseWriter, request *http.Request) {
+	body, err := readLimitedBody(response, request, 1<<20)
+	if err != nil {
+		writeMappedError(response, err)
+		return
+	}
+	var payload struct {
+		CertificatePEM string `json:"certificate_pem"`
+		Reason         string `json:"reason"`
+	}
+	if err := decodeJSON(body, &payload); err != nil {
+		writeMappedError(response, fmt.Errorf("%w: %v", errBadRequest, err))
+		return
+	}
+	if server.options.ExternalRevoker == nil {
+		writeAPIError(response, http.StatusServiceUnavailable, "unavailable", "external revoker is not configured")
+		return
+	}
+	record, verdicts, err := server.options.ExternalRevoker.RevokeExternal(request.Context(), pki.Caller{
+		Owner: "local-admin", Source: "admin-ui", RemoteAddr: request.RemoteAddr,
+	}, payload.CertificatePEM, payload.Reason)
+	if err != nil {
+		writePKIError(response, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, RevokeExternalCertificateResponse{
+		Certificate: CertificateFile{CertificateName: record.Name, SerialNumber: record.SerialNumber, Role: record.Role, Kind: "certificate", NotAfter: formatTime(record.NotAfter), Revoked: record.Revoked},
+		Warnings:    warningsView(verdicts),
+	})
+}
+
+func (server *Server) clientCA() *CertificateFile {
+	path := server.options.Config.Listen.TLS.ClientCAFile
+	if path == "" {
+		return nil
+	}
+	info, err := os.Lstat(path)
+	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return nil
+	}
+	return &CertificateFile{Name: filepath.Base(path), Kind: "certificate", Role: "ca", SizeBytes: info.Size(), ModifiedAt: formatTime(info.ModTime()), DownloadURL: "/api/ca"}
+}
+
+func (server *Server) handleDownloadCA(response http.ResponseWriter, request *http.Request) {
+	path := serveroptionsCA(server)
+	if path == "" {
+		writeAPIError(response, http.StatusNotFound, "not_found", "client CA is not configured")
+		return
+	}
+	data, err := os.ReadFile(path) //nolint:gosec // operator-configured CA path
+	if err != nil {
+		writeAPIError(response, http.StatusNotFound, "not_found", "client CA is not available")
+		return
+	}
+	name := filepath.Base(path)
+	response.Header().Set("Content-Type", "application/x-pem-file")
+	response.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	response.Header().Set("Cache-Control", "no-store")
+	response.WriteHeader(http.StatusOK)
+	_, _ = response.Write(data) //nolint:gosec // serves a resolved certificate file
+}
+
+func serveroptionsCA(server *Server) string {
+	if server == nil || server.options.Config == nil {
+		return ""
+	}
+	return server.options.Config.Listen.TLS.ClientCAFile
+}
+
+func (server *Server) handleDownloadCertificate(response http.ResponseWriter, request *http.Request) {
+	if server.options.Files == nil {
+		writeAPIError(response, http.StatusServiceUnavailable, "unavailable", "certificate files are not configured")
+		return
+	}
+	name := strings.TrimPrefix(request.URL.Path, "/api/certificates/")
+	path, err := server.options.Files.ResolveFile(name)
+	if err != nil {
+		writeAPIError(response, http.StatusNotFound, "not_found", "certificate not found")
+		return
+	}
+	data, err := os.ReadFile(path) //nolint:gosec // resolved by the pki FileStore
+	if err != nil {
+		writeAPIError(response, http.StatusNotFound, "not_found", "certificate not found")
+		return
+	}
+	response.Header().Set("Content-Type", "application/x-pem-file")
+	response.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(path)}))
+	response.Header().Set("Cache-Control", "no-store")
+	response.WriteHeader(http.StatusOK)
+	_, _ = response.Write(data) //nolint:gosec // serves a resolved certificate file
 }
 
 func (server *Server) tlsInfo() TLSInfo {
@@ -139,120 +231,4 @@ func (server *Server) tlsInfo() TLSInfo {
 		info.Error = "server certificate has no DNS or IP subject alternative names"
 	}
 	return info
-}
-
-func (server *Server) clientCA() *CertificateFile {
-	path := server.options.Config.Listen.TLS.ClientCAFile
-	if path == "" {
-		return nil
-	}
-	info, err := os.Lstat(path)
-	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return nil
-	}
-	return &CertificateFile{
-		Name: filepath.Base(path), Kind: "certificate", Role: "ca",
-		SizeBytes: info.Size(), ModifiedAt: formatTime(info.ModTime()),
-		DownloadURL: "/api/ca",
-	}
-}
-
-func (server *Server) handleDownloadCA(response http.ResponseWriter, request *http.Request) {
-	path := server.options.Config.Listen.TLS.ClientCAFile
-	if path == "" {
-		writeAPIError(response, http.StatusNotFound, "not_found", "client CA is not configured")
-		return
-	}
-	info, err := os.Lstat(path)
-	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		writeAPIError(response, http.StatusNotFound, "not_found", "client CA is not available")
-		return
-	}
-	data, err := os.ReadFile(path) //nolint:gosec // operator-configured client CA path
-	if err != nil {
-		writeAPIError(response, http.StatusNotFound, "not_found", "client CA is not available")
-		return
-	}
-	name := filepath.Base(path)
-	response.Header().Set("Content-Type", "application/x-pem-file")
-	response.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
-	response.Header().Set("Cache-Control", "no-store")
-	response.WriteHeader(http.StatusOK)
-	_, _ = response.Write(data) //nolint:gosec // serves the configured public CA certificate as a download
-	server.options.Logger.Info("client CA downloaded", "remote", request.RemoteAddr)
-}
-
-func (server *Server) handleDownloadCertificate(response http.ResponseWriter, request *http.Request) {
-	name, err := pathName(request.URL.Path, "/api/certificates/")
-	if err != nil || !allowedCertificateName(name) {
-		writeAPIError(response, http.StatusNotFound, "not_found", "certificate not found")
-		return
-	}
-	dir := server.clientCertDir()
-	if dir == "" {
-		writeAPIError(response, http.StatusNotFound, "not_found", "certificate directory is not configured")
-		return
-	}
-	dirInfo, err := os.Lstat(dir)
-	if err != nil || dirInfo.Mode()&os.ModeSymlink != 0 || !dirInfo.IsDir() {
-		writeAPIError(response, http.StatusNotFound, "not_found", "certificate directory is not available")
-		return
-	}
-	path := filepath.Join(dir, name)
-	if server.isClientCAKey(path) {
-		writeAPIError(response, http.StatusNotFound, "not_found", "certificate not found")
-		return
-	}
-	info, err := os.Lstat(path) //nolint:gosec // path is a validated basename under the configured client certificate directory
-	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		writeAPIError(response, http.StatusNotFound, "not_found", "certificate not found")
-		return
-	}
-	data, err := os.ReadFile(path) //nolint:gosec // path is constrained to the configured client certificate directory
-	if err != nil {
-		writeAPIError(response, http.StatusNotFound, "not_found", "certificate not found")
-		return
-	}
-	response.Header().Set("Content-Type", "application/x-pem-file")
-	response.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
-	response.Header().Set("Cache-Control", "no-store")
-	response.WriteHeader(http.StatusOK)
-	_, _ = response.Write(data) //nolint:gosec // serves a validated client certificate/key file as a download
-	server.options.Logger.Info("client certificate downloaded", "name", name, "remote", request.RemoteAddr)
-}
-
-func roleFromCertificateName(name string) string {
-	base := strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(name, ".crt"), ".key"), ".pem")
-	role := strings.SplitN(base, "-", 2)[0]
-	switch role {
-	case "admin", "caller", "controller", "node":
-		return role
-	default:
-		return ""
-	}
-}
-
-func roleFromCertificate(path string) string {
-	data, err := os.ReadFile(path) //nolint:gosec // path is constrained to the configured client certificate directory
-	if err != nil {
-		return ""
-	}
-	block, _ := pem.Decode(data)
-	if block == nil || block.Type != "CERTIFICATE" {
-		return ""
-	}
-	certificate, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return ""
-	}
-	for _, uri := range certificate.URIs {
-		if uri.Scheme != "spiffe" || uri.Host != "kouja" {
-			continue
-		}
-		parts := strings.Split(strings.Trim(uri.Path, "/"), "/")
-		if len(parts) == 2 {
-			return parts[0]
-		}
-	}
-	return ""
 }

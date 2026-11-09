@@ -16,13 +16,16 @@ import (
 
 	"github.com/voidstarit/kouja/internal/adminui"
 	"github.com/voidstarit/kouja/internal/agent"
+	"github.com/voidstarit/kouja/internal/audit"
 	"github.com/voidstarit/kouja/internal/backup"
 	"github.com/voidstarit/kouja/internal/config"
 	"github.com/voidstarit/kouja/internal/credential"
 	"github.com/voidstarit/kouja/internal/hostid"
 	"github.com/voidstarit/kouja/internal/lvm"
+	"github.com/voidstarit/kouja/internal/naming"
 	"github.com/voidstarit/kouja/internal/observability"
 	"github.com/voidstarit/kouja/internal/operations"
+	"github.com/voidstarit/kouja/internal/pki"
 	"github.com/voidstarit/kouja/internal/state"
 	"github.com/voidstarit/kouja/internal/target"
 	"golang.org/x/sys/unix"
@@ -102,12 +105,15 @@ func run() error {
 	vgClassGate := &sync.Mutex{}
 	classMap := agent.NewClassMap(cfg.Storage.Classes, *configPath)
 	vgManager := agent.NewVGManager(store, lvmBackend, classMap)
+	metrics := observability.New()
+	auditRecorder := audit.NewRecorder(store, logger, metrics)
+	validators := naming.NewValidators()
+	vgClassManager := agent.NewVGClassManager(vgManager, classMap, vgClassGate, auditRecorder)
 
 	stepTimeouts := make(map[operations.Action]time.Duration)
 	for action, seconds := range cfg.Operations.StepTimeoutSecs {
 		stepTimeouts[operations.Action(action)] = time.Duration(seconds) * time.Second
 	}
-	metrics := observability.New()
 	manager := operations.New(store, lvmBackend, iscsi, nvme, credentials, operations.Options{
 		MaxAttempts:  cfg.Operations.MaxAttempts,
 		TotalTimeout: time.Duration(cfg.Operations.TotalTimeoutSecs) * time.Second,
@@ -133,10 +139,18 @@ func run() error {
 		NVMePortals:    cfg.Targets.NVMeTCP.Portals,
 		Ready:          ready.Load,
 		Admission:      admission,
+		Capabilities:   []string{"certificates", "storage_classes"},
 		StorageClasses: cfg.Storage.Classes,
 		Classes:        classMap,
 	})
-	adminService := agent.NewAdminService(store, lvmBackend,
+	pkiService, err := pki.New(pki.Options{
+		Config: cfg, Store: store, Audit: auditRecorder, Logger: logger,
+		Metrics: metrics, Naming: validators,
+	})
+	if err != nil {
+		return err
+	}
+	adminOptions := []agent.AdminOption{
 		agent.WithTargetExporters(map[string]target.Exporter{"iscsi": iscsi, "nvme-tcp": nvme}),
 		agent.WithCredentialManager(credentials),
 		agent.WithDriftRetrier(manager),
@@ -144,9 +158,12 @@ func run() error {
 		agent.WithClassRegistry(classMap),
 		agent.WithVGService(vgManager),
 		agent.WithVGClassGate(vgClassGate),
-	)
-	server, err := agent.NewServer(cfg, volumeService, adminService,
-		agent.WithReadiness(ready.Load), agent.WithMetrics(metrics))
+		agent.WithVGClassManager(vgClassManager),
+	}
+	adminOptions = append(adminOptions, agent.WithCertificateService(pkiService, pkiService, pkiService, pkiService))
+	adminService := agent.NewAdminService(store, lvmBackend, adminOptions...)
+	serverOptions := []agent.ServerOption{agent.WithReadiness(ready.Load), agent.WithMetrics(metrics), agent.WithRevocationChecker(pkiService)}
+	server, err := agent.NewServer(cfg, volumeService, adminService, serverOptions...)
 	if err != nil {
 		return err
 	}
@@ -154,6 +171,9 @@ func run() error {
 	adminServer := startAdminServer(cfg, adminui.Options{
 		ConfigPath: *configPath, Config: cfg, ConfigData: configData,
 		Store: store, Capacity: lvmBackend, VGs: vgManager, Classes: classMap,
+		VGClass: vgClassManager,
+		Issuer:  pkiService, Registry: pkiService, ExternalRevoker: pkiService,
+		Files: pkiService, CAStatus: pkiService,
 		Ready: ready.Load, HostUUID: hostUUID, AgentVersion: agentVersion,
 		APIVersion: apiVersion, StartedAt: time.Now(), Logger: logger, Metrics: metrics,
 		TargetMetrics: iscsi, DisableTarget: manager, EnableTarget: manager,
@@ -166,8 +186,15 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	certDone := make(chan struct{})
+	go func() {
+		defer close(certDone)
+		if err := pkiService.Run(ctx); err != nil {
+			logger.Error("certificate cleanup stopped", "error", err)
+		}
+	}()
 	backupDone := make(chan struct{})
-	go runBackups(ctx, store, cfg, logger, backupDone)
+	go runBackups(ctx, store, cfg, logger, backupDone, pkiService)
 	reconciler := agent.NewReconciler(store, lvmBackend, map[string]target.Exporter{
 		"iscsi": iscsi, "nvme-tcp": nvme,
 	}, time.Duration(cfg.State.ReconcileIntervalSeconds)*time.Second)
@@ -207,6 +234,7 @@ func run() error {
 		server.GracefulStop()
 		<-reconcileDone
 		<-backupDone
+		<-certDone
 		return nil
 	case err := <-serveErr:
 		ready.Store(false)
@@ -214,6 +242,7 @@ func run() error {
 		server.Stop()
 		<-reconcileDone
 		<-backupDone
+		<-certDone
 		if err != nil && !errors.Is(err, context.Canceled) {
 			return err
 		}
@@ -245,19 +274,21 @@ func acquireLock(path string) (*os.File, error) {
 	return file, nil
 }
 
-func runBackups(ctx context.Context, store *state.Store, cfg *config.Config, logger *slog.Logger, done chan<- struct{}) {
+func runBackups(ctx context.Context, store *state.Store, cfg *config.Config, logger *slog.Logger, done chan<- struct{}, snapshotter backup.JournalSnapshotter) {
 	defer close(done)
 	if cfg.State.BackupTarget == "" {
 		logger.Warn("backup target is not configured; backups are disabled")
 		return
 	}
 	manager, err := backup.New(store, backup.Options{
-		TargetDir:       cfg.State.BackupTarget,
-		HostIDFile:      cfg.HostIDFile,
-		SecretKeyFile:   cfg.SecretKeyFile,
-		RetentionShort:  cfg.State.BackupRetentionShort,
-		RetentionDaily:  cfg.State.BackupRetentionDaily,
-		RetentionWeekly: cfg.State.BackupRetentionWeekly,
+		TargetDir:          cfg.State.BackupTarget,
+		HostIDFile:         cfg.HostIDFile,
+		SecretKeyFile:      cfg.SecretKeyFile,
+		RetentionShort:     cfg.State.BackupRetentionShort,
+		RetentionDaily:     cfg.State.BackupRetentionDaily,
+		RetentionWeekly:    cfg.State.BackupRetentionWeekly,
+		JournalSnapshotter: snapshotter,
+		RevocationLogName:  "revoked-serials.log",
 	})
 	if err != nil {
 		logger.Error("backup configuration failed", "error", err)

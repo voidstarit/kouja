@@ -22,12 +22,15 @@ listen:
 admin_ui:
   enabled: false
   address: 127.0.0.1:9444
-  # Directory containing client certificates/keys exposed for download by the
-  # local admin UI. Only this directory is served, never the CA or server keys.
-  client_cert_dir: /etc/kouja/tls/clients
-  # Optional CA private key used only to issue new client/admin certificates
-  # from the local UI. Keep it root-owned at 0600; it is never downloadable.
-  client_ca_key_file: /etc/kouja/tls/ca.key
+
+certificate_authority:
+  enabled: false
+  key_file: /etc/kouja/tls/ca.key
+  certificate_dir: /etc/kouja/tls/clients
+  revocation_log_file: /var/lib/kouja/revoked-serials.log
+  default_ttl_days: 30
+  max_ttl_days: 365
+  max_active_certificates: 1000
 
 storage:
   headroom_percent: 5

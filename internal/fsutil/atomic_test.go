@@ -64,3 +64,27 @@ func TestWriteFileAtomicMissingParent(t *testing.T) {
 		t.Fatal("write into missing parent succeeded")
 	}
 }
+
+func TestWriteFileExclusiveAtomicCreatesAndRefusesOverwrite(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "exclusive.pem")
+	if err := WriteFileExclusiveAtomic(path, []byte("first\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %o", info.Mode().Perm())
+	}
+	if err := WriteFileExclusiveAtomic(path, []byte("second\n"), 0o600); err == nil {
+		t.Fatal("exclusive write overwrote an existing file")
+	}
+	data, err := os.ReadFile(path) //nolint:gosec // test path
+	if err != nil || string(data) != "first\n" {
+		t.Fatalf("data = %q, %v", data, err)
+	}
+	if err := WriteFileExclusiveAtomic("", []byte("x"), 0o600); err == nil {
+		t.Fatal("empty path should fail")
+	}
+}

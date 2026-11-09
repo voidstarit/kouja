@@ -130,3 +130,20 @@ export async function createCertificate(role: "admin" | "caller", name: string):
 export function certificateDownloadURL(name: string): string {
   return `/api/certificates/${encodeURIComponent(name)}`;
 }
+
+export async function revokeCertificate(serial: string): Promise<void> {
+  const response = await fetch(`/api/certificates/${encodeURIComponent(serial)}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+  });
+  await parseResponse<void>(response);
+}
+
+export async function revokeExternalCertificate(certificatePEM: string, reason: string): Promise<void> {
+  const response = await fetch("/api/certificates:revoke-external", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ certificate_pem: certificatePEM, reason }),
+  });
+  await parseResponse<void>(response);
+}

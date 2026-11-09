@@ -22,6 +22,7 @@ import (
 	"github.com/voidstarit/kouja/internal/fsutil"
 	"github.com/voidstarit/kouja/internal/lvm"
 	"github.com/voidstarit/kouja/internal/observability"
+	"github.com/voidstarit/kouja/internal/pki"
 	"github.com/voidstarit/kouja/internal/state"
 	"github.com/voidstarit/kouja/internal/target"
 )
@@ -56,27 +57,33 @@ type TargetEnabler interface {
 }
 
 type Options struct {
-	ConfigPath    string
-	Config        *config.Config
-	ConfigData    []byte
-	Store         Store
-	Capacity      CapacityProvider
-	VGs           agent.VGService
-	Classes       agent.ClassRegistry
-	Ready         func() bool
-	HostUUID      string
-	AgentVersion  string
-	APIVersion    string
-	StartedAt     time.Time
-	Logger        *slog.Logger
-	Now           func() time.Time
-	Assets        fs.FS
-	Listener      net.Listener
-	Metrics       *observability.Metrics
-	TargetMetrics target.ISCSIMetricsProvider
-	DisableTarget TargetDisabler
-	EnableTarget  TargetEnabler
-	VGClassGate   *sync.Mutex
+	ConfigPath      string
+	Config          *config.Config
+	ConfigData      []byte
+	Store           Store
+	Capacity        CapacityProvider
+	VGs             agent.VGService
+	Classes         agent.ClassRegistry
+	VGClass         *agent.VGClassManager
+	Ready           func() bool
+	HostUUID        string
+	AgentVersion    string
+	APIVersion      string
+	StartedAt       time.Time
+	Logger          *slog.Logger
+	Now             func() time.Time
+	Assets          fs.FS
+	Listener        net.Listener
+	Metrics         *observability.Metrics
+	TargetMetrics   target.ISCSIMetricsProvider
+	DisableTarget   TargetDisabler
+	EnableTarget    TargetEnabler
+	VGClassGate     *sync.Mutex
+	Issuer          pki.Issuer
+	Registry        pki.Registry
+	ExternalRevoker pki.ExternalRevoker
+	Files           pki.FileStore
+	CAStatus        pki.CAStatus
 }
 
 type Server struct {
@@ -313,12 +320,28 @@ func (server *Server) serveHTTP(response http.ResponseWriter, request *http.Requ
 			methodNotAllowed(response)
 		}
 
-	case strings.HasPrefix(request.URL.Path, "/api/certificates/"):
-		if request.Method != http.MethodGet {
+	case request.URL.Path == "/api/certificates:revoke-external":
+		if request.Method != http.MethodPost {
 			methodNotAllowed(response)
 			return
 		}
-		server.handleDownloadCertificate(response, request)
+		if !server.authorizeMutation(response, request, "application/json") {
+			return
+		}
+		server.handleRevokeExternalCertificate(response, request)
+
+	case strings.HasPrefix(request.URL.Path, "/api/certificates/"):
+		switch request.Method {
+		case http.MethodGet:
+			server.handleDownloadCertificate(response, request)
+		case http.MethodDelete:
+			if !server.authorizeMutation(response, request, "application/json") {
+				return
+			}
+			server.handleRevokeCertificate(response, request)
+		default:
+			methodNotAllowed(response)
+		}
 	case strings.HasPrefix(request.URL.Path, "/api/classes/"):
 		if request.Method != http.MethodPut && request.Method != http.MethodDelete {
 			methodNotAllowed(response)

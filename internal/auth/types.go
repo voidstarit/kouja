@@ -16,8 +16,9 @@ const (
 )
 
 type Identity struct {
-	Owner string
-	Role  Role
+	Owner        string
+	Role         Role
+	SerialNumber string
 }
 
 func Parse(peer *x509.Certificate) (Identity, error) {
@@ -32,15 +33,19 @@ func Parse(peer *x509.Certificate) (Identity, error) {
 		if len(parts) != 2 {
 			continue
 		}
+		serial := ""
+		if peer.SerialNumber != nil {
+			serial = strings.ToLower(peer.SerialNumber.Text(16))
+		}
 		switch parts[0] {
 		case "caller":
-			return Identity{Owner: uri.String(), Role: RoleCaller}, nil
+			return Identity{Owner: uri.String(), Role: RoleCaller, SerialNumber: serial}, nil
 		case "controller":
-			return Identity{Owner: uri.String(), Role: RoleController}, nil
+			return Identity{Owner: uri.String(), Role: RoleController, SerialNumber: serial}, nil
 		case "node":
-			return Identity{Owner: uri.String(), Role: RoleNode}, nil
+			return Identity{Owner: uri.String(), Role: RoleNode, SerialNumber: serial}, nil
 		case "admin":
-			return Identity{Owner: uri.String(), Role: RoleAdmin}, nil
+			return Identity{Owner: uri.String(), Role: RoleAdmin, SerialNumber: serial}, nil
 		}
 	}
 	return Identity{}, errors.New("no kouja URI SAN")

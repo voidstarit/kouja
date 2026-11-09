@@ -76,6 +76,34 @@
       }
     },
     "/v1/admin/vgs/{vgName}": {
+      "get": {
+        "operationId": "GetVG",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/GetVGResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vgName",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      },
       "delete": {
         "operationId": "DeregisterVG",
         "responses": {
@@ -394,6 +422,295 @@
             "in": "query",
             "required": false,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/certificates": {
+      "get": {
+        "operationId": "ListCertificates",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ListCertificatesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageToken",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      },
+      "post": {
+        "operationId": "IssueCertificate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/IssueCertificateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueCertificateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/certificates/{serialNumber}": {
+      "get": {
+        "operationId": "GetCertificate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/GetCertificateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "serialNumber",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/certificates/{serialNumber}:revoke": {
+      "post": {
+        "operationId": "RevokeCertificate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/RevokeCertificateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "serialNumber",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RevokeCertificateBody"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/certificates:revoke-external": {
+      "post": {
+        "operationId": "RevokeExternalCertificate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/RevokeExternalCertificateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RevokeExternalCertificateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/classes": {
+      "get": {
+        "operationId": "ListClasses",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ListClassesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/classes/{className}": {
+      "get": {
+        "operationId": "GetClass",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/GetClassResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "className",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      },
+      "delete": {
+        "operationId": "RemoveClass",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/RemoveClassResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "className",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "requestId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      },
+      "put": {
+        "operationId": "SetClass",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/SetClassResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "className",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SetClassBody"
+            }
           }
         ],
         "tags": [
@@ -856,6 +1173,104 @@
         }
       }
     },
+    "Certificate": {
+      "type": "object",
+      "properties": {
+        "serialNumber": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "issuedBy": {
+          "type": "string"
+        },
+        "notBefore": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "notAfter": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revokedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revokedReason": {
+          "type": "string"
+        },
+        "revoked": {
+          "type": "boolean"
+        },
+        "certificatePem": {
+          "type": "string"
+        },
+        "clientCaPem": {
+          "type": "string"
+        },
+        "issuerSerial": {
+          "type": "string"
+        }
+      }
+    },
+    "CertificateSummary": {
+      "type": "object",
+      "properties": {
+        "serialNumber": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "issuedBy": {
+          "type": "string"
+        },
+        "issuerSerial": {
+          "type": "string"
+        },
+        "notBefore": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "notAfter": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revokedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revoked": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ClassMapping": {
+      "type": "object",
+      "properties": {
+        "className": {
+          "type": "string"
+        },
+        "vgName": {
+          "type": "string"
+        }
+      }
+    },
     "CreateVolumeRequest": {
       "type": "object",
       "properties": {
@@ -1046,6 +1461,22 @@
         }
       }
     },
+    "GetCertificateResponse": {
+      "type": "object",
+      "properties": {
+        "certificate": {
+          "$ref": "#/definitions/Certificate"
+        }
+      }
+    },
+    "GetClassResponse": {
+      "type": "object",
+      "properties": {
+        "class": {
+          "$ref": "#/definitions/ClassMapping"
+        }
+      }
+    },
     "GetCredentialResponse": {
       "type": "object",
       "properties": {
@@ -1085,6 +1516,32 @@
           }
         },
         "ready": {
+          "type": "boolean"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "callerRole": {
+          "type": "string"
+        },
+        "callerOwner": {
+          "type": "string"
+        }
+      }
+    },
+    "GetVGResponse": {
+      "type": "object",
+      "properties": {
+        "capacity": {
+          "$ref": "#/definitions/Capacity"
+        },
+        "registeredVgUuid": {
+          "type": "string"
+        },
+        "uuidDrift": {
           "type": "boolean"
         }
       }
@@ -1209,6 +1666,95 @@
         },
         "requestId": {
           "type": "string"
+        }
+      }
+    },
+    "IssueCertificateRequest": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "ttlDays": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "IssueCertificateResponse": {
+      "type": "object",
+      "properties": {
+        "certificatePem": {
+          "type": "string"
+        },
+        "privateKeyPem": {
+          "type": "string"
+        },
+        "clientCaPem": {
+          "type": "string"
+        },
+        "serialNumber": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "notBefore": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "notAfter": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "issuerSerial": {
+          "type": "string"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/Warning"
+          }
+        }
+      }
+    },
+    "ListCertificatesResponse": {
+      "type": "object",
+      "properties": {
+        "certificates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/CertificateSummary"
+          }
+        },
+        "nextPageToken": {
+          "type": "string"
+        }
+      }
+    },
+    "ListClassesResponse": {
+      "type": "object",
+      "properties": {
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/ClassMapping"
+          }
         }
       }
     },
@@ -1338,6 +1884,21 @@
         }
       }
     },
+    "RemoveClassResponse": {
+      "type": "object",
+      "properties": {
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/Warning"
+          }
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
     "ResizeVolumeBody": {
       "type": "object",
       "properties": {
@@ -1420,6 +1981,67 @@
         }
       }
     },
+    "RevokeCertificateBody": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "RevokeCertificateResponse": {
+      "type": "object",
+      "properties": {
+        "certificate": {
+          "$ref": "#/definitions/Certificate"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/Warning"
+          }
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "RevokeExternalCertificateRequest": {
+      "type": "object",
+      "properties": {
+        "certificatePem": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "RevokeExternalCertificateResponse": {
+      "type": "object",
+      "properties": {
+        "certificate": {
+          "$ref": "#/definitions/Certificate"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/Warning"
+          }
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
     "RevokeGrantResponse": {
       "type": "object",
       "properties": {
@@ -1459,6 +2081,35 @@
         "SESSION_STATE_UNKNOWN"
       ],
       "default": "SESSION_STATE_UNSPECIFIED"
+    },
+    "SetClassBody": {
+      "type": "object",
+      "properties": {
+        "vgName": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    },
+    "SetClassResponse": {
+      "type": "object",
+      "properties": {
+        "class": {
+          "$ref": "#/definitions/ClassMapping"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/Warning"
+          }
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
     },
     "Status": {
       "type": "object",
@@ -1653,6 +2304,17 @@
         "VOLUME_STATE_DRIFT"
       ],
       "default": "VOLUME_STATE_UNSPECIFIED"
+    },
+    "Warning": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
     },
     "WipeVolumeBody": {
       "type": "object",

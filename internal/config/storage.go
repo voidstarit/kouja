@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/voidstarit/kouja/internal/fsutil"
+	"github.com/voidstarit/kouja/internal/naming"
 	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v3"
 )
@@ -62,7 +63,11 @@ func updateClass(path, class, vg string, remove bool) ([]string, error) {
 				return nil, fmt.Errorf("%w: class %q already maps to VG %q", ErrClassConflict, otherClass, vg)
 			}
 		}
-		if !vgNamePattern.MatchString(class) || !vgNamePattern.MatchString(vg) {
+		validators := naming.NewValidators()
+		if err := validators.StorageClassName(class); err != nil {
+			return nil, fmt.Errorf("%w: invalid class or VG name", ErrInvalid)
+		}
+		if err := validators.VolumeGroupName(vg); err != nil {
 			return nil, fmt.Errorf("%w: invalid class or VG name", ErrInvalid)
 		}
 	}

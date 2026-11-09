@@ -75,6 +75,20 @@ func (service *testVGService) Register(_ context.Context, name, _ string, _ bool
 	service.vgs = append(service.vgs, state.VG{Name: name, UUID: service.capacity.VGUUID, State: "active", RegisteredAt: time.Now(), UpdatedAt: time.Now()})
 	return service.capacity, nil
 }
+func (service *testVGService) RegisterWithAudit(ctx context.Context, name, expected string, replace bool, _ *state.AuditEvent) (lvm.Capacity, error) {
+	return service.Register(ctx, name, expected, replace)
+}
+func (service *testVGService) DeregisterWithAudit(ctx context.Context, name string, _ *state.AuditEvent) error {
+	return service.Deregister(ctx, name)
+}
+func (service *testVGService) Get(_ context.Context, name string) (state.VG, error) {
+	for _, vg := range service.vgs {
+		if vg.Name == name {
+			return vg, nil
+		}
+	}
+	return state.VG{}, agent.ErrVGNotFound
+}
 func (service *testVGService) Deregister(_ context.Context, name string) error {
 	for index, vg := range service.vgs {
 		if vg.Name == name {
@@ -1063,118 +1077,6 @@ func TestWarningViewsAndPathNames(t *testing.T) {
 	}
 }
 
-func TestAdminUICertificateListAndDownload(t *testing.T) {
-	server, _, _, _ := newTestServer(t)
-	dir := t.TempDir()
-	server.options.Config.AdminUI.ClientCertDir = dir
-	if err := os.WriteFile(filepath.Join(dir, "admin-admin.crt"), []byte("CERTIFICATE"), 0o644); err != nil { //nolint:gosec // test fixture certificate
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "admin-admin.key"), []byte("PRIVATE KEY"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "ignore.txt"), []byte("ignore"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "server.key"), []byte("SERVER KEY"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "ca.crt"), []byte("CA"), 0o644); err != nil { //nolint:gosec // test fixture
-		t.Fatal(err)
-	}
-	caPath := filepath.Join(dir, "client-ca.crt")
-	if err := os.WriteFile(caPath, []byte("CLIENT CA"), 0o644); err != nil { //nolint:gosec // test fixture
-		t.Fatal(err)
-	}
-	server.options.Config.Listen.TLS.ClientCAFile = caPath
-	if err := os.Symlink(filepath.Join(dir, "admin-admin.crt"), filepath.Join(dir, "link.crt")); err != nil {
-		t.Fatal(err)
-	}
-	response := doRequest(t, server, http.MethodGet, "/api/certificates", nil, nil)
-	if response.Code != http.StatusOK {
-		t.Fatalf("list certificates = %d", response.Code)
-	}
-	var listing CertificatesResponse
-	if err := jsonUnmarshal(response.Body.Bytes(), &listing); err != nil {
-		t.Fatal(err)
-	}
-	if len(listing.Files) != 2 {
-		t.Fatalf("certificate files = %#v", listing.Files)
-	}
-	if listing.Directory != dir || listing.Files[0].Role != "admin" {
-		t.Fatalf("certificate listing = %#v", listing)
-	}
-	if listing.CA == nil || listing.CA.DownloadURL != "/api/ca" {
-		t.Fatalf("CA listing = %#v", listing.CA)
-	}
-	response = doRequest(t, server, http.MethodGet, "/api/certificates/admin-admin.crt", nil, nil)
-	if response.Code != http.StatusOK || response.Body.String() != "CERTIFICATE" {
-		t.Fatalf("download certificate = %d %q", response.Code, response.Body.String())
-	}
-	if response.Header().Get("Content-Disposition") == "" {
-		t.Fatal("missing content disposition")
-	}
-	response = doRequest(t, server, http.MethodGet, "/api/ca", nil, nil)
-	if response.Code != http.StatusOK || response.Body.String() != "CLIENT CA" {
-		t.Fatalf("download CA = %d %q", response.Code, response.Body.String())
-	}
-	for _, path := range []string{"/api/certificates/../admin-admin.crt", "/api/certificates/link.crt", "/api/certificates/ignore.txt", "/api/certificates/server.key", "/api/certificates/ca.crt"} {
-		response = doRequest(t, server, http.MethodGet, path, nil, nil)
-		if response.Code != http.StatusNotFound {
-			t.Fatalf("unsafe path %q = %d", path, response.Code)
-		}
-	}
-}
-
-func TestAdminUICertificateErrorsAndISCSIDisabled(t *testing.T) {
-	server, _, _, _ := newTestServer(t)
-	server.options.Config.AdminUI.ClientCertDir = ""
-	server.options.Config.Listen.TLS.CertFile = filepath.Join(t.TempDir(), "server.crt")
-	response := doRequest(t, server, http.MethodGet, "/api/certificates", nil, nil)
-	if response.Code != http.StatusOK {
-		t.Fatalf("fallback cert dir = %d", response.Code)
-	}
-	var listing CertificatesResponse
-	if err := jsonUnmarshal(response.Body.Bytes(), &listing); err != nil {
-		t.Fatal(err)
-	}
-	if listing.Directory != filepath.Join(filepath.Dir(server.options.Config.Listen.TLS.CertFile), "clients") || listing.Error == "" {
-		t.Fatalf("fallback listing = %#v", listing)
-	}
-	response = doRequest(t, server, http.MethodGet, "/api/certificates/missing.crt", nil, nil)
-	if response.Code != http.StatusNotFound {
-		t.Fatalf("missing download = %d", response.Code)
-	}
-	fileDir := t.TempDir()
-	filePath := filepath.Join(fileDir, "not-a-dir")
-	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	server.options.Config.AdminUI.ClientCertDir = filePath
-	response = doRequest(t, server, http.MethodGet, "/api/certificates", nil, nil)
-	if err := jsonUnmarshal(response.Body.Bytes(), &listing); err != nil {
-		t.Fatal(err)
-	}
-	if listing.Error == "" {
-		t.Fatal("non-directory client cert path was accepted")
-	}
-	server.options.Config.Targets.ISCSI.Enabled = false
-	response = doRequest(t, server, http.MethodGet, "/api/status", nil, nil)
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d", response.Code)
-	}
-	var status StatusResponse
-	if err := jsonUnmarshal(response.Body.Bytes(), &status); err != nil {
-		t.Fatal(err)
-	}
-	if status.ISCSI.Enabled || len(status.ISCSI.Portals) != 1 {
-		t.Fatalf("disabled iSCSI view = %#v", status.ISCSI)
-	}
-	if roleFromCertificateName("unknown-file.crt") != "" {
-		t.Fatal("unknown role accepted")
-	}
-}
-
 func TestAdminUITLSServerNames(t *testing.T) {
 	server, _, _, _ := newTestServer(t)
 	certPath := filepath.Join(t.TempDir(), "server.crt")
@@ -1246,140 +1148,5 @@ func TestAdminUITLSInfoErrors(t *testing.T) {
 	}
 	if listing.CA != nil {
 		t.Fatalf("missing CA listed: %#v", listing.CA)
-	}
-}
-
-func writeTestClientCA(t *testing.T) (string, string) {
-	t.Helper()
-	dir := t.TempDir()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	template := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "test-client-ca"},
-		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(24 * time.Hour),
-		IsCA:                  true,
-		BasicConstraintsValid: true,
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
-	}
-	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	certPath := filepath.Join(dir, "client-ca.crt")
-	keyPath := filepath.Join(dir, "ca.key")
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	keyDER, err := x509.MarshalECPrivateKey(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
-	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil { //nolint:gosec // test fixture
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return certPath, keyPath
-}
-
-func TestAdminUICreateCertificate(t *testing.T) {
-	server, _, _, _ := newTestServer(t)
-	dir := t.TempDir()
-	if err := os.Chmod(dir, 0o700); err != nil { //nolint:gosec // test directory must be private
-		t.Fatal(err)
-	}
-	caPath, caKeyPath := writeTestClientCA(t)
-	server.options.Config.AdminUI.ClientCertDir = dir
-	server.options.Config.Listen.TLS.ClientCAFile = caPath
-	server.options.Config.AdminUI.ClientCAKeyFile = caKeyPath
-
-	response := doRequest(t, server, http.MethodPost, "/api/certificates",
-		[]byte(`{"role":"caller","name":"rookery-prod"}`),
-		map[string]string{"Content-Type": "application/json"})
-	if response.Code != http.StatusCreated {
-		t.Fatalf("create certificate = %d %s", response.Code, response.Body.String())
-	}
-	var created CreateCertificateResponse
-	if err := jsonUnmarshal(response.Body.Bytes(), &created); err != nil {
-		t.Fatal(err)
-	}
-	if created.Certificate.Name != "caller-rookery-prod.crt" || created.PrivateKey.Name != "caller-rookery-prod.key" {
-		t.Fatalf("created = %#v", created)
-	}
-	certPEM, err := os.ReadFile(filepath.Join(dir, created.Certificate.Name)) //nolint:gosec // test fixture
-	if err != nil {
-		t.Fatal(err)
-	}
-	block, _ := pem.Decode(certPEM)
-	if block == nil {
-		t.Fatal("generated certificate is not PEM")
-	}
-	certificate, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(certificate.URIs) != 1 || certificate.URIs[0].String() != "spiffe://kouja/caller/rookery-prod" {
-		t.Fatalf("URI SANs = %#v", certificate.URIs)
-	}
-	if len(certificate.ExtKeyUsage) != 1 || certificate.ExtKeyUsage[0] != x509.ExtKeyUsageClientAuth {
-		t.Fatalf("extended key usage = %#v", certificate.ExtKeyUsage)
-	}
-	caPEM, err := os.ReadFile(caPath) //nolint:gosec // test fixture
-	if err != nil {
-		t.Fatal(err)
-	}
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(caPEM) {
-		t.Fatal("could not load test CA")
-	}
-	if _, err := certificate.Verify(x509.VerifyOptions{Roots: roots, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}}); err != nil {
-		t.Fatalf("generated certificate did not verify: %v", err)
-	}
-	keyInfo, err := os.Stat(filepath.Join(dir, created.PrivateKey.Name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if keyInfo.Mode().Perm() != 0o600 {
-		t.Fatalf("private key mode = %o", keyInfo.Mode().Perm())
-	}
-	response = doRequest(t, server, http.MethodPost, "/api/certificates",
-		[]byte(`{"role":"caller","name":"rookery-prod"}`),
-		map[string]string{"Content-Type": "application/json"})
-	if response.Code != http.StatusConflict {
-		t.Fatalf("duplicate certificate = %d %s", response.Code, response.Body.String())
-	}
-	response = doRequest(t, server, http.MethodPost, "/api/certificates",
-		[]byte(`{"role":"unknown","name":"x"}`),
-		map[string]string{"Content-Type": "application/json"})
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("invalid role = %d %s", response.Code, response.Body.String())
-	}
-	response = doRequest(t, server, http.MethodPost, "/api/certificates",
-		[]byte(`{"role":"admin","name":"../bad"}`),
-		map[string]string{"Content-Type": "application/json"})
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("invalid name = %d %s", response.Code, response.Body.String())
-	}
-}
-
-func TestAdminUICreateCertificateRequiresCAKey(t *testing.T) {
-	server, _, _, _ := newTestServer(t)
-	dir := t.TempDir()
-	if err := os.Chmod(dir, 0o700); err != nil { //nolint:gosec // test directory must be private
-		t.Fatal(err)
-	}
-	caPath, _ := writeTestClientCA(t)
-	server.options.Config.AdminUI.ClientCertDir = dir
-	server.options.Config.Listen.TLS.ClientCAFile = caPath
-	server.options.Config.AdminUI.ClientCAKeyFile = filepath.Join(t.TempDir(), "missing.key")
-	response := doRequest(t, server, http.MethodPost, "/api/certificates",
-		[]byte(`{"role":"admin","name":"operator"}`),
-		map[string]string{"Content-Type": "application/json"})
-	if response.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("missing CA key = %d %s", response.Code, response.Body.String())
 	}
 }

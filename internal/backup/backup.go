@@ -23,14 +23,20 @@ var (
 
 const timestampLayout = "20060102T150405.000000000Z"
 
+type JournalSnapshotter interface {
+	SnapshotJournal(ctx context.Context, destination string) error
+}
+
 type Options struct {
-	TargetDir       string
-	HostIDFile      string
-	SecretKeyFile   string
-	RetentionShort  int
-	RetentionDaily  int
-	RetentionWeekly int
-	Now             func() time.Time
+	TargetDir          string
+	HostIDFile         string
+	SecretKeyFile      string
+	RetentionShort     int
+	RetentionDaily     int
+	RetentionWeekly    int
+	JournalSnapshotter JournalSnapshotter
+	RevocationLogName  string
+	Now                func() time.Time
 }
 
 type Manager struct {
@@ -42,6 +48,7 @@ type Result struct {
 	DatabasePath string
 	KeyPath      string
 	HostIDPath   string
+	JournalPath  string
 	ManifestPath string
 	CreatedAt    time.Time
 }
@@ -54,6 +61,7 @@ type manifest struct {
 	HostUUID      string    `json:"host_uuid"`
 	HasKey        bool      `json:"has_key"`
 	HasHostID     bool      `json:"has_host_id"`
+	RevocationLog string    `json:"revocation_log,omitempty"`
 	SchemaVersion int       `json:"schema_version"`
 }
 
@@ -82,6 +90,9 @@ func New(store *state.Store, opts Options) (*Manager, error) {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
+	if opts.RevocationLogName == "" {
+		opts.RevocationLogName = "revoked-serials.log"
+	}
 	return &Manager{store: store, opts: opts}, nil
 }
 
@@ -94,8 +105,9 @@ func (manager *Manager) Run(ctx context.Context) (Result, error) {
 	databasePath := filepath.Join(manager.opts.TargetDir, base+".db")
 	keyPath := filepath.Join(manager.opts.TargetDir, base+".secret.key")
 	hostIDPath := filepath.Join(manager.opts.TargetDir, base+".host-id")
+	journalPath := filepath.Join(manager.opts.TargetDir, base+"-"+manager.opts.RevocationLogName)
 	manifestPath := filepath.Join(manager.opts.TargetDir, base+".restore.json")
-	for _, path := range []string{databasePath, keyPath, hostIDPath, manifestPath} {
+	for _, path := range []string{databasePath, keyPath, hostIDPath, journalPath, manifestPath} {
 		if _, err := os.Stat(path); err == nil {
 			return Result{}, fmt.Errorf("%w: %s", ErrConflict, path)
 		}
@@ -149,6 +161,14 @@ func (manager *Manager) Run(ctx context.Context) (Result, error) {
 	if err != nil {
 		return fail(err)
 	}
+	hasJournal := false
+	if manager.opts.JournalSnapshotter != nil {
+		if err := manager.opts.JournalSnapshotter.SnapshotJournal(ctx, journalPath); err != nil {
+			return fail(err)
+		}
+		hasJournal = true
+		created = append(created, journalPath)
+	}
 	document := manifest{
 		CreatedAt:     now,
 		Database:      filepath.Base(databasePath),
@@ -161,6 +181,9 @@ func (manager *Manager) Run(ctx context.Context) (Result, error) {
 	}
 	if !hasKey {
 		document.SecretKey = ""
+	}
+	if hasJournal {
+		document.RevocationLog = filepath.Base(journalPath)
 	}
 	if err := writeJSONAtomic(manifestPath, document); err != nil {
 		return fail(err)
@@ -176,10 +199,15 @@ func (manager *Manager) Run(ctx context.Context) (Result, error) {
 	if hasKey {
 		resultKey = keyPath
 	}
+	resultJournal := ""
+	if hasJournal {
+		resultJournal = journalPath
+	}
 	return Result{
 		DatabasePath: databasePath,
 		KeyPath:      resultKey,
 		HostIDPath:   hostIDPath,
+		JournalPath:  resultJournal,
 		ManifestPath: manifestPath,
 		CreatedAt:    now,
 	}, nil
@@ -235,6 +263,9 @@ func (manager *Manager) Rotate(now time.Time) error {
 		}
 		for _, suffix := range []string{".db", ".secret.key", ".host-id", ".restore.json"} {
 			_ = os.Remove(filepath.Join(manager.opts.TargetDir, candidate.base+suffix))
+		}
+		if manager.opts.JournalSnapshotter != nil && manager.opts.RevocationLogName != "" {
+			_ = os.Remove(filepath.Join(manager.opts.TargetDir, candidate.base+"-"+manager.opts.RevocationLogName))
 		}
 	}
 	_ = now

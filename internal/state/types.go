@@ -119,20 +119,63 @@ type Operation struct {
 }
 
 type Audit struct {
-	ID          int64
-	Timestamp   time.Time
-	Caller      string
-	OperationID string
-	RequestID   string
-	VolumeID    string
-	Action      string
-	Protocol    string
-	Initiator   string
-	PreState    string
-	PostState   string
-	Result      string
-	ErrorCode   string
-	SourceIP    string
+	ID           int64
+	Timestamp    time.Time
+	Caller       string
+	OperationID  string
+	RequestID    string
+	VolumeID     string
+	Action       string
+	Protocol     string
+	Initiator    string
+	PreState     string
+	PostState    string
+	Result       string
+	ErrorCode    string
+	SourceIP     string
+	ResourceType string
+	ResourceID   string
+	Role         string
+	Name         string
+	Detail       string
+}
+
+// AuditEvent is the explicit audit contract used by the shared recorder.
+type AuditEvent struct {
+	CallerOwner  string
+	CallerSerial string
+	OperationID  string
+	RequestID    string
+	ResourceType string
+	ResourceID   string
+	Role         string
+	Name         string
+	Action       string
+	Result       string
+	ErrorCode    string
+	Detail       string
+	RemoteAddr   string
+}
+
+// Certificate is a registry row. RequestID is nullable because external and
+// revocation-only rows have no issuing request.
+type Certificate struct {
+	SerialNumber   string
+	Role           string
+	Name           string
+	IssuedBy       string
+	IssuerSerial   string
+	RequestID      *string
+	CertificatePEM string
+	ClientCAPEM    string
+	CertFile       string
+	KeyFile        string
+	NotBefore      time.Time
+	NotAfter       time.Time
+	CreatedAt      time.Time
+	RevokedAt      *time.Time
+	RevokedReason  string
+	Revoked        bool
 }
 
 type Page struct {

@@ -13,9 +13,7 @@ func TestAdminUIConfigAndLoadWithData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.AdminUI.Enabled || cfg.AdminUI.Address != "127.0.0.1:9444" ||
-		cfg.AdminUI.ClientCertDir != "/etc/kouja/tls/clients" ||
-		cfg.AdminUI.ClientCAKeyFile != "/etc/kouja/tls/ca.key" {
+	if cfg.AdminUI.Enabled || cfg.AdminUI.Address != "127.0.0.1:9444" {
 		t.Fatalf("admin defaults = %#v", cfg.AdminUI)
 	}
 	path := filepath.Join(t.TempDir(), "config.yaml")
@@ -38,14 +36,6 @@ func TestAdminUIConfigAndLoadWithData(t *testing.T) {
 		if !errors.Is(err, ErrInvalid) {
 			t.Fatalf("address %q error = %v, want ErrInvalid", address, err)
 		}
-	}
-	_, err = Parse([]byte(validConfig + "\nadmin_ui:\n  enabled: false\n  client_cert_dir: relative\n"))
-	if !errors.Is(err, ErrInvalid) {
-		t.Fatalf("relative client cert dir = %v, want ErrInvalid", err)
-	}
-	_, err = Parse([]byte(validConfig + "\nadmin_ui:\n  enabled: false\n  client_ca_key_file: relative\n"))
-	if !errors.Is(err, ErrInvalid) {
-		t.Fatalf("relative client CA key = %v, want ErrInvalid", err)
 	}
 }
 

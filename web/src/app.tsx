@@ -11,8 +11,12 @@ import type {
 
 type Tab = "status" | "config";
 
+function tabFromLocation(): Tab {
+  return window.location.hash.replace(/^#\/?/, "") === "config" ? "config" : "status";
+}
+
 export function App() {
-  const [tab, setTab] = useState<Tab>("status");
+  const [tab, setTab] = useState<Tab>(tabFromLocation);
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [config, setConfig] = useState<ConfigResponse | null>(null);
   const [vgs, setVGs] = useState<VGStatus[]>([]);
@@ -69,6 +73,9 @@ export function App() {
   }
 
   useEffect(() => {
+    if (!window.location.hash) {
+      window.history.replaceState(null, "", "#/status");
+    }
     void refreshAll();
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") {
@@ -87,6 +94,34 @@ export function App() {
     }
   }, [tab]);
 
+  useEffect(() => {
+    const onHashChange = () => {
+      const next = tabFromLocation();
+      if (next === tab) {
+        return;
+      }
+      if (tab === "config" && configDirty && !window.confirm("Discard unsaved configuration changes?")) {
+        window.history.replaceState(null, "", `#/${tab}`);
+        return;
+      }
+      setConfigDirty(false);
+      setTab(next);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [tab, configDirty]);
+
+  function selectTab(next: Tab) {
+    if (next === tab) {
+      return;
+    }
+    if (tab === "config" && configDirty && !window.confirm("Discard unsaved configuration changes?")) {
+      return;
+    }
+    setConfigDirty(false);
+    window.location.hash = `/${next}`;
+  }
+
   const onSaved = (_result: SaveConfigResponse) => {
     void refreshStatus();
   };
@@ -98,20 +133,21 @@ export function App() {
           <h1>kouja admin</h1>
           <p class="muted">Local-only configuration and status. No authentication.</p>
         </div>
-        <nav class="tabs">
+        <nav class="tabs" aria-label="Main navigation" role="tablist">
           <button
+            role="tab"
+            aria-selected={tab === "status"}
             class={tab === "status" ? "active" : ""}
-            onClick={() => {
-              if (tab === "config" && configDirty && !window.confirm("Discard unsaved configuration changes?")) {
-                return;
-              }
-              setConfigDirty(false);
-              setTab("status");
-            }}
+            onClick={() => selectTab("status")}
           >
             Status
           </button>
-          <button class={tab === "config" ? "active" : ""} onClick={() => setTab("config")}>
+          <button
+            role="tab"
+            aria-selected={tab === "config"}
+            class={tab === "config" ? "active" : ""}
+            onClick={() => selectTab("config")}
+          >
             Configuration
           </button>
         </nav>

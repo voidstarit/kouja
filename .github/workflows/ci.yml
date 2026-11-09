@@ -40,6 +40,12 @@ jobs:
       - name: Build UI, Go packages, and release binaries
         run: make all
 
+      - name: Build Terraform provider
+        run: make build-provider
+
+      - name: Test Terraform provider
+        run: make test-provider
+
       - name: Verify Node-free fallback build
         run: make build-go
 

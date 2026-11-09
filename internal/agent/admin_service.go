@@ -14,6 +14,7 @@ import (
 	"github.com/voidstarit/kouja/internal/credential"
 	"github.com/voidstarit/kouja/internal/lvm"
 	"github.com/voidstarit/kouja/internal/operations"
+	"github.com/voidstarit/kouja/internal/pki"
 	"github.com/voidstarit/kouja/internal/state"
 	"github.com/voidstarit/kouja/internal/target"
 	"google.golang.org/grpc/codes"
@@ -37,6 +38,11 @@ type AdminService struct {
 	classRegistry ClassRegistry
 	vgs           VGService
 	vgClassGate   *sync.Mutex
+	issuer        pki.Issuer
+	registry      pki.Registry
+	external      pki.ExternalRevoker
+	files         pki.FileStore
+	vgClass       *VGClassManager
 }
 
 type AdminOption func(*AdminService)
@@ -85,6 +91,21 @@ func WithVGClassGate(gate *sync.Mutex) AdminOption {
 	}
 }
 
+func WithVGClassManager(manager *VGClassManager) AdminOption {
+	return func(service *AdminService) {
+		service.vgClass = manager
+	}
+}
+
+func WithCertificateService(issuer pki.Issuer, registry pki.Registry, external pki.ExternalRevoker, files pki.FileStore) AdminOption {
+	return func(service *AdminService) {
+		service.issuer = issuer
+		service.registry = registry
+		service.external = external
+		service.files = files
+	}
+}
+
 func NewAdminService(store *state.Store, lvmBackend lvm.Backend, options ...AdminOption) *AdminService {
 	service := &AdminService{
 		store: store, lvm: lvmBackend, exporters: make(map[string]target.Exporter),
@@ -109,10 +130,20 @@ func (service *AdminService) RegisterVG(ctx context.Context, request *koujav1.Re
 	if !vgNamePattern.MatchString(request.GetVgName()) {
 		return nil, status.Error(codes.InvalidArgument, "invalid vg_name")
 	}
+	if service.vgClass != nil {
+		registration, verdicts, err := service.vgClass.RegisterVG(ctx, request.GetVgName(), request.GetVgUuid(), false, service.auditEvent(ctx))
+		if err != nil {
+			return nil, vgStatusError(err)
+		}
+		_ = verdicts
+		return &koujav1.RegisterVGResponse{Capacity: service.capacityProto(registration.Capacity), RequestId: requestID(ctx, request.GetRequestId())}, nil
+	}
 	if service.vgs == nil {
 		return nil, status.Error(codes.FailedPrecondition, "volume group service is not configured")
 	}
-	capacity, err := service.vgs.Register(ctx, request.GetVgName(), request.GetVgUuid(), true)
+	service.vgClassGate.Lock()
+	defer service.vgClassGate.Unlock()
+	capacity, err := service.vgs.Register(ctx, request.GetVgName(), request.GetVgUuid(), false)
 	if err != nil {
 		return nil, vgStatusError(err)
 	}
@@ -127,6 +158,12 @@ func (service *AdminService) DeregisterVG(ctx context.Context, request *koujav1.
 	}
 	if request.GetVgName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "vg_name is required")
+	}
+	if service.vgClass != nil {
+		if _, err := service.vgClass.DeregisterVG(ctx, request.GetVgName(), service.auditEvent(ctx)); err != nil {
+			return nil, vgStatusError(err)
+		}
+		return &koujav1.DeregisterVGResponse{RequestId: requestID(ctx, request.GetRequestId())}, nil
 	}
 	if service.vgs == nil {
 		return nil, status.Error(codes.FailedPrecondition, "volume group service is not configured")
@@ -177,6 +214,11 @@ func (service *AdminService) storageClass(vg string) string {
 		return service.classRegistry.ClassName(vg)
 	}
 	return storageClassForVG(service.classes, vg)
+}
+
+func (service *AdminService) auditEvent(ctx context.Context) state.AuditEvent {
+	identity, _ := IdentityFromContext(ctx)
+	return state.AuditEvent{CallerOwner: identity.Owner, OperationID: "", RequestID: RequestIDFromContext(ctx), Result: "succeeded"}
 }
 
 func vgStatusError(err error) error {

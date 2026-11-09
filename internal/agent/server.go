@@ -27,13 +27,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type RevocationChecker interface {
+	IsRevoked(serial string) bool
+}
+
 type Server struct {
-	grpc      *grpc.Server
-	http      *http.Server
-	listener  net.Listener
-	tlsConfig *tls.Config
-	ready     func() bool
-	metrics   *observability.Metrics
+	grpc        *grpc.Server
+	http        *http.Server
+	listener    net.Listener
+	tlsConfig   *tls.Config
+	ready       func() bool
+	metrics     *observability.Metrics
+	revocations RevocationChecker
 }
 
 type ServerOption func(*Server)
@@ -53,6 +58,12 @@ func WithMetrics(metrics *observability.Metrics) ServerOption {
 	}
 }
 
+func WithRevocationChecker(checker RevocationChecker) ServerOption {
+	return func(server *Server) {
+		server.revocations = checker
+	}
+}
+
 func NewServer(cfg *config.Config, volumeService koujav1.VolumeServiceServer, adminService koujav1.AdminServiceServer, options ...ServerOption) (*Server, error) {
 	tlsConfig, err := loadTLS(cfg)
 	if err != nil {
@@ -62,7 +73,12 @@ func NewServer(cfg *config.Config, volumeService koujav1.VolumeServiceServer, ad
 	if err != nil {
 		return nil, fmt.Errorf("agent: listen %s: %w", cfg.Listen.Address, err)
 	}
-	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(UnaryInterceptor))
+	server := &Server{listener: listener, tlsConfig: tlsConfig, ready: func() bool { return true }}
+	for _, option := range options {
+		option(server)
+	}
+	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(server.unaryInterceptor))
+	server.grpc = grpcServer
 	koujav1.RegisterVolumeServiceServer(grpcServer, volumeService)
 	koujav1.RegisterAdminServiceServer(grpcServer, adminService)
 	healthServer := health.NewServer()
@@ -78,13 +94,17 @@ func NewServer(cfg *config.Config, volumeService koujav1.VolumeServiceServer, ad
 		_ = listener.Close()
 		return nil, fmt.Errorf("agent: register admin HTTP gateway: %w", err)
 	}
-	server := &Server{grpc: grpcServer, listener: listener, tlsConfig: tlsConfig, ready: func() bool { return true }}
-	for _, option := range options {
-		option(server)
-	}
 	handler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		requestContext := withTLSIdentity(request.Context(), request)
 		request = request.WithContext(requestContext)
+		if server.revocations != nil {
+			if identity, ok := IdentityFromContext(requestContext); ok && identity.SerialNumber != "" && server.revocations.IsRevoked(identity.SerialNumber) {
+				response.Header().Set("Content-Type", "application/json")
+				response.WriteHeader(http.StatusUnauthorized)
+				_, _ = response.Write([]byte(`{"code":16,"message":"certificate revoked","details":[]}`))
+				return
+			}
+		}
 		if strings.HasPrefix(request.Header.Get("Content-Type"), "application/grpc") {
 			grpcServer.ServeHTTP(response, request)
 			return
@@ -179,7 +199,15 @@ func withTLSIdentity(ctx context.Context, request *http.Request) context.Context
 	return ctx
 }
 
-func UnaryInterceptor(ctx context.Context, request any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+func UnaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	return interceptIdentity(ctx, request, info, handler, nil)
+}
+
+func (server *Server) unaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	return interceptIdentity(ctx, request, info, handler, server.revocations)
+}
+
+func interceptIdentity(ctx context.Context, request any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler, checker RevocationChecker) (any, error) {
 	if _, ok := IdentityFromContext(ctx); !ok {
 		peerInfo, ok := peer.FromContext(ctx)
 		if !ok || peerInfo.AuthInfo == nil {
@@ -194,6 +222,11 @@ func UnaryInterceptor(ctx context.Context, request any, _ *grpc.UnaryServerInfo,
 			return nil, status.Error(codes.Unauthenticated, "invalid client identity")
 		}
 		ctx = WithIdentity(ctx, identity)
+	}
+	if checker != nil {
+		if identity, ok := IdentityFromContext(ctx); ok && identity.SerialNumber != "" && checker.IsRevoked(identity.SerialNumber) {
+			return nil, status.Error(codes.Unauthenticated, "certificate revoked")
+		}
 	}
 	if incoming, ok := metadata.FromIncomingContext(ctx); ok {
 		if values := incoming.Get("x-request-id"); len(values) > 0 {

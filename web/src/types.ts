@@ -297,16 +297,26 @@ export interface SetClassResponse {
 
 export interface CertificateFile {
   name: string;
+  certificate_name?: string;
+  serial_number?: string;
   kind: "certificate" | "private_key";
   role: string;
   size_bytes: number;
   modified_at: string;
+  not_after?: string;
+  revoked_at?: string;
   download_url: string;
+  key_download_url?: string;
+  revoked: boolean;
 }
 
 export interface CertificatesResponse {
-  directory: string;
-  files: CertificateFile[];
+  directory?: string;
+  issuance_enabled: boolean;
+  default_ttl_days: number;
+  max_ttl_days: number;
+  certificates: CertificateFile[];
+  files?: CertificateFile[];
   ca: CertificateFile | null;
   error: string;
 }
@@ -314,6 +324,11 @@ export interface CertificatesResponse {
 export interface CreateCertificateResponse {
   certificate: CertificateFile;
   private_key: CertificateFile;
+  serial_number: string;
+  role: string;
+  name: string;
+  not_after: string;
+  warnings: WarningView[];
 }
 
 export interface StatusPageProps {

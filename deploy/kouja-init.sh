@@ -358,8 +358,18 @@ q() { yaml_quote "$1"; }
     echo "  enabled: false"
     echo "  address: 127.0.0.1:9444"
   fi
-  echo "  client_cert_dir: $(q "$TLS_DIR/clients")"
-  echo "  client_ca_key_file: $(q "$CA_KEY")"
+  echo "certificate_authority:"
+  if [[ -f "$CA_KEY" && -n "${ADMIN_CERT:-}" ]]; then
+    echo "  enabled: true"
+  else
+    echo "  enabled: false"
+  fi
+  echo "  key_file: $(q "$CA_KEY")"
+  echo "  certificate_dir: $(q "$TLS_DIR/clients")"
+  echo "  revocation_log_file: /var/lib/kouja/revoked-serials.log"
+  echo "  default_ttl_days: 30"
+  echo "  max_ttl_days: 365"
+  echo "  max_active_certificates: 1000"
   echo "storage:"
   echo "  headroom_percent: 5"
   echo "  headroom_min_bytes: 1073741824"

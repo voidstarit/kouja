@@ -287,22 +287,47 @@ type SetClassResponse struct {
 }
 
 type CertificateFile struct {
-	Name        string `json:"name"`
-	Kind        string `json:"kind"`
-	Role        string `json:"role"`
-	SizeBytes   int64  `json:"size_bytes"`
-	ModifiedAt  string `json:"modified_at"`
-	DownloadURL string `json:"download_url"`
+	Name            string `json:"name"`
+	CertificateName string `json:"certificate_name,omitempty"`
+	SerialNumber    string `json:"serial_number,omitempty"`
+	Kind            string `json:"kind"`
+	Role            string `json:"role"`
+	SizeBytes       int64  `json:"size_bytes"`
+	ModifiedAt      string `json:"modified_at,omitempty"`
+	NotAfter        string `json:"not_after,omitempty"`
+	RevokedAt       string `json:"revoked_at,omitempty"`
+	DownloadURL     string `json:"download_url,omitempty"`
+	KeyDownloadURL  string `json:"key_download_url,omitempty"`
+	Revoked         bool   `json:"revoked"`
 }
 
 type CertificatesResponse struct {
-	Directory string            `json:"directory"`
-	Files     []CertificateFile `json:"files"`
-	CA        *CertificateFile  `json:"ca"`
-	Error     string            `json:"error"`
+	Directory       string            `json:"directory,omitempty"`
+	IssuanceEnabled bool              `json:"issuance_enabled"`
+	DefaultTTLDays  int               `json:"default_ttl_days"`
+	MaxTTLDays      int               `json:"max_ttl_days"`
+	Certificates    []CertificateFile `json:"certificates"`
+	Files           []CertificateFile `json:"files,omitempty"`
+	CA              *CertificateFile  `json:"ca"`
+	Error           string            `json:"error"`
 }
 
 type CreateCertificateResponse struct {
+	Certificate  CertificateFile `json:"certificate"`
+	PrivateKey   CertificateFile `json:"private_key"`
+	SerialNumber string          `json:"serial_number"`
+	Role         string          `json:"role"`
+	Name         string          `json:"name"`
+	NotAfter     string          `json:"not_after"`
+	Warnings     []WarningView   `json:"warnings"`
+}
+
+type RevokeCertificateResponse struct {
 	Certificate CertificateFile `json:"certificate"`
-	PrivateKey  CertificateFile `json:"private_key"`
+	Warnings    []WarningView   `json:"warnings"`
+}
+
+type RevokeExternalCertificateResponse struct {
+	Certificate CertificateFile `json:"certificate"`
+	Warnings    []WarningView   `json:"warnings"`
 }
