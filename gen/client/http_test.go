@@ -214,6 +214,82 @@ func bddTestHTTPClientCoverage(t testing.TB) {
 				return err
 			},
 		},
+		{
+			name: "IssueCertificate", method: http.MethodPost, path: "/v1/admin/certificates",
+			wantBody: map[string]any{"role": "admin", "name": "bootstrap", "ttlDays": float64(365), "requestId": "req-1"},
+			invoke: func(ctx context.Context, client *HTTP) error {
+				_, err := client.IssueCertificate(ctx, &koujav1.IssueCertificateRequest{Role: "admin", Name: "bootstrap", TtlDays: 365, RequestId: "req-1"})
+				return err
+			},
+		},
+		{
+			name: "ListCertificates", method: http.MethodGet, path: "/v1/admin/certificates",
+			query: url.Values{"pageSize": {"10"}, "pageToken": {"next"}},
+			invoke: func(ctx context.Context, client *HTTP) error {
+				_, err := client.ListCertificates(ctx, &koujav1.ListCertificatesRequest{PageSize: 10, PageToken: "next"})
+				return err
+			},
+		},
+		{
+			name: "GetCertificate", method: http.MethodGet, path: "/v1/admin/certificates/serial-1",
+			invoke: func(ctx context.Context, client *HTTP) error {
+				_, err := client.GetCertificate(ctx, &koujav1.GetCertificateRequest{SerialNumber: "serial-1"})
+				return err
+			},
+		},
+		{
+			name: "RevokeCertificate", method: http.MethodPost, path: "/v1/admin/certificates/serial-1:revoke",
+			wantBody: map[string]any{"reason": "compromised", "requestId": "req-1"},
+			invoke: func(ctx context.Context, client *HTTP) error {
+				_, err := client.RevokeCertificate(ctx, &koujav1.RevokeCertificateRequest{SerialNumber: "serial-1", Reason: "compromised", RequestId: "req-1"})
+				return err
+			},
+		},
+		{
+			name: "RevokeExternalCertificate", method: http.MethodPost, path: "/v1/admin/certificates:revoke-external",
+			wantBody: map[string]any{"certificatePem": "pem", "reason": "orphan"},
+			invoke: func(ctx context.Context, client *HTTP) error {
+				_, err := client.RevokeExternalCertificate(ctx, &koujav1.RevokeExternalCertificateRequest{CertificatePem: "pem", Reason: "orphan"})
+				return err
+			},
+		},
+		{
+			name: "ListClasses", method: http.MethodGet, path: "/v1/admin/classes",
+			invoke: func(ctx context.Context, client *HTTP) error {
+				_, err := client.ListClasses(ctx, &koujav1.ListClassesRequest{})
+				return err
+			},
+		},
+		{
+			name: "GetClass", method: http.MethodGet, path: "/v1/admin/classes/gold",
+			invoke: func(ctx context.Context, client *HTTP) error {
+				_, err := client.GetClass(ctx, &koujav1.GetClassRequest{ClassName: "gold"})
+				return err
+			},
+		},
+		{
+			name: "SetClass", method: http.MethodPut, path: "/v1/admin/classes/gold",
+			wantBody: map[string]any{"vgName": "vg-1", "requestId": "req-1"},
+			invoke: func(ctx context.Context, client *HTTP) error {
+				_, err := client.SetClass(ctx, &koujav1.SetClassRequest{ClassName: "gold", VgName: "vg-1", RequestId: "req-1"})
+				return err
+			},
+		},
+		{
+			name: "RemoveClass", method: http.MethodDelete, path: "/v1/admin/classes/gold",
+			query: url.Values{"requestId": {"req-1"}},
+			invoke: func(ctx context.Context, client *HTTP) error {
+				_, err := client.RemoveClass(ctx, &koujav1.RemoveClassRequest{ClassName: "gold", RequestId: "req-1"})
+				return err
+			},
+		},
+		{
+			name: "GetVG", method: http.MethodGet, path: "/v1/admin/vgs/vg-1",
+			invoke: func(ctx context.Context, client *HTTP) error {
+				_, err := client.GetVG(ctx, &koujav1.GetVGRequest{VgName: "vg-1"})
+				return err
+			},
+		},
 	}
 	for _, call := range calls {
 		runHTTPCall(t, call)

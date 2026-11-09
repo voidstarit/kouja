@@ -21,7 +21,7 @@ var (
 	ErrSchemaNewer = errors.New("state: database schema is newer than the binary")
 )
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 // Store owns the SQLite database. A Store is safe for concurrent use.
 type Store struct {
@@ -123,6 +123,14 @@ func (s *Store) migrate(ctx context.Context) error {
 	}
 	if current > schemaVersion {
 		return fmt.Errorf("%w: database version %d, binary version %d", ErrSchemaNewer, current, schemaVersion)
+	}
+
+	if current < 2 && !strings.EqualFold(s.path, ":memory:") {
+		backup := filepath.Join(filepath.Dir(s.path),
+			fmt.Sprintf("state.db.pre-v2-%d.bak", time.Now().UTC().UnixNano()))
+		if err := s.Backup(ctx, backup); err != nil {
+			return fmt.Errorf("state: create pre-v2 backup: %w", err)
+		}
 	}
 
 	for version := current + 1; version <= schemaVersion; version++ {
@@ -291,4 +299,15 @@ type Tx interface {
 	DeleteCredential(owner, volumeID string) error
 
 	PutAudit(Audit) error
+	PutAuditEvent(AuditEvent) error
+	DeleteAuditBefore(before time.Time) (int64, error)
+
+	PutCertificate(Certificate) error
+	GetCertificate(serial string) (Certificate, error)
+	ListCertificates(pageSize int32, pageToken string) ([]Certificate, string, error)
+	RevokeCertificate(serial, reason string, at time.Time) (Certificate, error)
+	DeleteCertificate(serial string) error
+	ListExpiredCertificates(before time.Time) ([]Certificate, error)
+	ListRevokedSerials() ([]string, error)
+	CountActiveCertificates(now time.Time) (int, error)
 }

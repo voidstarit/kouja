@@ -717,6 +717,152 @@ func (client *HTTP) RevokeGrant(ctx context.Context, request *pb.RevokeGrantRequ
 	return response, nil
 }
 
+// IssueCertificate calls the AdminService RPC.
+func (client *HTTP) IssueCertificate(ctx context.Context, request *pb.IssueCertificateRequest) (*pb.IssueCertificateResponse, error) {
+	if request == nil {
+		request = &pb.IssueCertificateRequest{}
+	}
+	response := &pb.IssueCertificateResponse{}
+	if err := client.do(ctx, http.MethodPost, "/v1/admin/certificates", nil, request, response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// ListCertificates calls the AdminService RPC.
+func (client *HTTP) ListCertificates(ctx context.Context, request *pb.ListCertificatesRequest) (*pb.ListCertificatesResponse, error) {
+	if request == nil {
+		request = &pb.ListCertificatesRequest{}
+	}
+	query := url.Values{}
+	addInt32(query, "pageSize", request.GetPageSize())
+	addString(query, "pageToken", request.GetPageToken())
+	response := &pb.ListCertificatesResponse{}
+	if err := client.do(ctx, http.MethodGet, "/v1/admin/certificates", query, nil, response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// GetCertificate calls the AdminService RPC.
+func (client *HTTP) GetCertificate(ctx context.Context, request *pb.GetCertificateRequest) (*pb.GetCertificateResponse, error) {
+	if request == nil {
+		request = &pb.GetCertificateRequest{}
+	}
+	pathValue0, err := pathParam("serial_number", request.GetSerialNumber())
+	if err != nil {
+		return nil, err
+	}
+	response := &pb.GetCertificateResponse{}
+	if err := client.do(ctx, http.MethodGet, "/v1/admin/certificates/"+pathValue0, nil, nil, response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// RevokeCertificate calls the AdminService RPC.
+func (client *HTTP) RevokeCertificate(ctx context.Context, request *pb.RevokeCertificateRequest) (*pb.RevokeCertificateResponse, error) {
+	if request == nil {
+		request = &pb.RevokeCertificateRequest{}
+	}
+	pathValue0, err := pathParam("serial_number", request.GetSerialNumber())
+	if err != nil {
+		return nil, err
+	}
+	response := &pb.RevokeCertificateResponse{}
+	if err := client.do(ctx, http.MethodPost, "/v1/admin/certificates/"+pathValue0+":revoke", nil, request, response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// RevokeExternalCertificate calls the AdminService RPC.
+func (client *HTTP) RevokeExternalCertificate(ctx context.Context, request *pb.RevokeExternalCertificateRequest) (*pb.RevokeExternalCertificateResponse, error) {
+	if request == nil {
+		request = &pb.RevokeExternalCertificateRequest{}
+	}
+	response := &pb.RevokeExternalCertificateResponse{}
+	if err := client.do(ctx, http.MethodPost, "/v1/admin/certificates:revoke-external", nil, request, response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// ListClasses calls the AdminService RPC.
+func (client *HTTP) ListClasses(ctx context.Context, _ *pb.ListClassesRequest) (*pb.ListClassesResponse, error) {
+	response := &pb.ListClassesResponse{}
+	if err := client.do(ctx, http.MethodGet, "/v1/admin/classes", nil, nil, response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// GetClass calls the AdminService RPC.
+func (client *HTTP) GetClass(ctx context.Context, request *pb.GetClassRequest) (*pb.GetClassResponse, error) {
+	if request == nil {
+		request = &pb.GetClassRequest{}
+	}
+	pathValue0, err := pathParam("class_name", request.GetClassName())
+	if err != nil {
+		return nil, err
+	}
+	response := &pb.GetClassResponse{}
+	if err := client.do(ctx, http.MethodGet, "/v1/admin/classes/"+pathValue0, nil, nil, response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// SetClass calls the AdminService RPC.
+func (client *HTTP) SetClass(ctx context.Context, request *pb.SetClassRequest) (*pb.SetClassResponse, error) {
+	if request == nil {
+		request = &pb.SetClassRequest{}
+	}
+	pathValue0, err := pathParam("class_name", request.GetClassName())
+	if err != nil {
+		return nil, err
+	}
+	response := &pb.SetClassResponse{}
+	if err := client.do(ctx, http.MethodPut, "/v1/admin/classes/"+pathValue0, nil, request, response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// RemoveClass calls the AdminService RPC.
+func (client *HTTP) RemoveClass(ctx context.Context, request *pb.RemoveClassRequest) (*pb.RemoveClassResponse, error) {
+	if request == nil {
+		request = &pb.RemoveClassRequest{}
+	}
+	pathValue0, err := pathParam("class_name", request.GetClassName())
+	if err != nil {
+		return nil, err
+	}
+	query := url.Values{}
+	addString(query, "requestId", request.GetRequestId())
+	response := &pb.RemoveClassResponse{}
+	if err := client.do(ctx, http.MethodDelete, "/v1/admin/classes/"+pathValue0, query, nil, response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// GetVG calls the AdminService RPC.
+func (client *HTTP) GetVG(ctx context.Context, request *pb.GetVGRequest) (*pb.GetVGResponse, error) {
+	if request == nil {
+		request = &pb.GetVGRequest{}
+	}
+	pathValue0, err := pathParam("vg_name", request.GetVgName())
+	if err != nil {
+		return nil, err
+	}
+	response := &pb.GetVGResponse{}
+	if err := client.do(ctx, http.MethodGet, "/v1/admin/vgs/"+pathValue0, nil, nil, response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 // CreateVolume calls the VolumeService RPC.
 func (client *HTTP) CreateVolume(ctx context.Context, request *pb.CreateVolumeRequest) (*pb.CreateVolumeResponse, error) {
 	if request == nil {

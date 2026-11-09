@@ -7,28 +7,29 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/voidstarit/kouja/internal/naming"
 	"gopkg.in/yaml.v3"
 )
 
 var ErrInvalid = errors.New("config: invalid")
 
 type Config struct {
-	HostIDFile    string           `yaml:"host_id_file"`
-	DataDir       string           `yaml:"data_dir"`
-	SecretKeyFile string           `yaml:"secret_key_file"`
-	EmergencyLog  string           `yaml:"emergency_log"`
-	Listen        ListenConfig     `yaml:"listen"`
-	AdminUI       AdminUIConfig    `yaml:"admin_ui"`
-	Storage       StorageConfig    `yaml:"storage"`
-	Targets       TargetsConfig    `yaml:"targets"`
-	Operations    OperationsConfig `yaml:"operations"`
-	Admission     AdmissionConfig  `yaml:"admission"`
-	State         StateConfig      `yaml:"state"`
+	HostIDFile           string                     `yaml:"host_id_file"`
+	DataDir              string                     `yaml:"data_dir"`
+	SecretKeyFile        string                     `yaml:"secret_key_file"`
+	EmergencyLog         string                     `yaml:"emergency_log"`
+	Listen               ListenConfig               `yaml:"listen"`
+	AdminUI              AdminUIConfig              `yaml:"admin_ui"`
+	Storage              StorageConfig              `yaml:"storage"`
+	Targets              TargetsConfig              `yaml:"targets"`
+	Operations           OperationsConfig           `yaml:"operations"`
+	Admission            AdmissionConfig            `yaml:"admission"`
+	State                StateConfig                `yaml:"state"`
+	CertificateAuthority CertificateAuthorityConfig `yaml:"certificate_authority"`
 }
 
 // AdminUIConfig configures the optional loopback-only local administration UI.
@@ -37,6 +38,17 @@ type AdminUIConfig struct {
 	Address         string `yaml:"address"`
 	ClientCertDir   string `yaml:"client_cert_dir"`
 	ClientCAKeyFile string `yaml:"client_ca_key_file"`
+}
+
+// CertificateAuthorityConfig configures agent-issued client certificates.
+type CertificateAuthorityConfig struct {
+	Enabled               bool   `yaml:"enabled"`
+	KeyFile               string `yaml:"key_file"`
+	CertificateDir        string `yaml:"certificate_dir"`
+	RevocationLogFile     string `yaml:"revocation_log_file"`
+	DefaultTTLDays        int    `yaml:"default_ttl_days"`
+	MaxTTLDays            int    `yaml:"max_ttl_days"`
+	MaxActiveCertificates int    `yaml:"max_active_certificates"`
 }
 
 type ListenConfig struct {
@@ -205,6 +217,13 @@ func Default() Config {
 			ReconcileIntervalSeconds:   60,
 			AuditRetentionDays:         90,
 		},
+		CertificateAuthority: CertificateAuthorityConfig{
+			Enabled:               false,
+			RevocationLogFile:     "/var/lib/kouja/revoked-serials.log",
+			DefaultTTLDays:        30,
+			MaxTTLDays:            365,
+			MaxActiveCertificates: 1000,
+		},
 	}
 }
 
@@ -255,6 +274,15 @@ func (cfg *Config) applyDefaults() {
 	if cfg.AdminUI.ClientCAKeyFile == "" && cfg.Listen.TLS.ClientCAFile != "" {
 		cfg.AdminUI.ClientCAKeyFile = filepath.Join(filepath.Dir(cfg.Listen.TLS.ClientCAFile), "ca.key")
 	}
+	if cfg.CertificateAuthority.KeyFile == "" && cfg.Listen.TLS.ClientCAFile != "" {
+		cfg.CertificateAuthority.KeyFile = filepath.Join(filepath.Dir(cfg.Listen.TLS.ClientCAFile), "ca.key")
+	}
+	if cfg.CertificateAuthority.CertificateDir == "" && cfg.Listen.TLS.CertFile != "" {
+		cfg.CertificateAuthority.CertificateDir = filepath.Join(filepath.Dir(cfg.Listen.TLS.CertFile), "clients")
+	}
+	if cfg.CertificateAuthority.RevocationLogFile == "" {
+		cfg.CertificateAuthority.RevocationLogFile = defaults.CertificateAuthority.RevocationLogFile
+	}
 	for _, action := range []string{"create", "export", "delete", "resize"} {
 		if cfg.Operations.StepTimeoutSecs == nil {
 			cfg.Operations.StepTimeoutSecs = make(map[string]int)
@@ -264,8 +292,6 @@ func (cfg *Config) applyDefaults() {
 		}
 	}
 }
-
-var vgNamePattern = regexp.MustCompile(`^[A-Za-z0-9+_.-]{1,127}$`)
 
 func (cfg *Config) Validate() error {
 	for kind, path := range map[string]string{
@@ -309,17 +335,18 @@ func (cfg *Config) Validate() error {
 	if cfg.Storage.WipeTimeoutSeconds <= 0 {
 		return fmt.Errorf("%w: storage.wipe_timeout_seconds must be positive", ErrInvalid)
 	}
+	validators := naming.NewValidators()
 	for _, vg := range cfg.Storage.VGs {
-		if !vgNamePattern.MatchString(vg) {
+		if err := validators.VolumeGroupName(vg); err != nil {
 			return fmt.Errorf("%w: invalid storage.vgs entry %q", ErrInvalid, vg)
 		}
 	}
 	classVGs := make(map[string]string, len(cfg.Storage.Classes))
 	for class, vg := range cfg.Storage.Classes {
-		if !vgNamePattern.MatchString(class) {
+		if err := validators.StorageClassName(class); err != nil {
 			return fmt.Errorf("%w: invalid storage.classes name %q", ErrInvalid, class)
 		}
-		if !vgNamePattern.MatchString(vg) {
+		if err := validators.VolumeGroupName(vg); err != nil {
 			return fmt.Errorf("%w: invalid storage.classes.%s VG %q", ErrInvalid, class, vg)
 		}
 		if other, ok := classVGs[vg]; ok {
@@ -371,7 +398,60 @@ func (cfg *Config) Validate() error {
 		cfg.State.AuditRetentionDays <= 0 {
 		return fmt.Errorf("%w: state interval and retention values must be positive", ErrInvalid)
 	}
+	if err := requireAbsolute("certificate_authority.key_file", cfg.CertificateAuthority.KeyFile); err != nil {
+		return err
+	}
+	if err := requireAbsolute("certificate_authority.certificate_dir", cfg.CertificateAuthority.CertificateDir); err != nil {
+		return err
+	}
+	if err := requireAbsolute("certificate_authority.revocation_log_file", cfg.CertificateAuthority.RevocationLogFile); err != nil {
+		return err
+	}
+	if cfg.CertificateAuthority.DefaultTTLDays < 1 || cfg.CertificateAuthority.DefaultTTLDays > 365 {
+		return fmt.Errorf("%w: certificate_authority.default_ttl_days must be between 1 and 365", ErrInvalid)
+	}
+	if cfg.CertificateAuthority.MaxTTLDays < 1 || cfg.CertificateAuthority.MaxTTLDays > 365 {
+		return fmt.Errorf("%w: certificate_authority.max_ttl_days must be between 1 and 365", ErrInvalid)
+	}
+	if cfg.CertificateAuthority.MaxTTLDays < cfg.CertificateAuthority.DefaultTTLDays {
+		return fmt.Errorf("%w: certificate_authority.max_ttl_days must be >= default_ttl_days", ErrInvalid)
+	}
+	if cfg.CertificateAuthority.MaxActiveCertificates <= 0 {
+		return fmt.Errorf("%w: certificate_authority.max_active_certificates must be positive", ErrInvalid)
+	}
+	for _, other := range []string{
+		cfg.Listen.TLS.CertFile,
+		cfg.Listen.TLS.KeyFile,
+		cfg.Listen.TLS.ClientCAFile,
+		cfg.CertificateAuthority.KeyFile,
+	} {
+		if other == "" {
+			continue
+		}
+		if filepath.Clean(cfg.CertificateAuthority.CertificateDir) == filepath.Clean(filepath.Dir(other)) {
+			return fmt.Errorf("%w: certificate_authority.certificate_dir must not share a directory with %s", ErrInvalid, other)
+		}
+	}
+	if sameOrWithin(cfg.CertificateAuthority.RevocationLogFile, cfg.CertificateAuthority.CertificateDir) {
+		return fmt.Errorf("%w: certificate_authority.revocation_log_file must not be inside certificate_dir", ErrInvalid)
+	}
+	for _, other := range []string{
+		cfg.Listen.TLS.CertFile,
+		cfg.Listen.TLS.KeyFile,
+		cfg.Listen.TLS.ClientCAFile,
+		cfg.CertificateAuthority.KeyFile,
+	} {
+		if other != "" && filepath.Clean(cfg.CertificateAuthority.RevocationLogFile) == filepath.Clean(other) {
+			return fmt.Errorf("%w: certificate_authority.revocation_log_file must not equal %s", ErrInvalid, other)
+		}
+	}
 	return nil
+}
+
+func sameOrWithin(path, dir string) bool {
+	path = filepath.Clean(path)
+	dir = filepath.Clean(dir)
+	return path == dir || strings.HasPrefix(path, dir+string(filepath.Separator))
 }
 
 func requireAbsolute(kind, path string) error {

@@ -3,6 +3,9 @@ package state
 import (
 	"database/sql"
 	"fmt"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 //nolint:gosec // SQL column list, not a credential
@@ -152,4 +155,49 @@ func (tx *sqlTx) PutAudit(audit Audit) error {
 		nullableString(audit.SourceIP),
 	)
 	return mapError(err)
+}
+
+func (tx *sqlTx) PutAuditEvent(event AuditEvent) error {
+	if event.CallerOwner == "" || event.Action == "" || event.Result == "" {
+		return fmt.Errorf("%w: caller, action, and result are required", ErrInvalid)
+	}
+	if event.OperationID == "" {
+		event.OperationID = uuid.NewString()
+	}
+	_, err := tx.tx.ExecContext(tx.ctx, `
+		INSERT INTO audit (
+			timestamp, caller, operation_id, request_id, volume_id, action,
+			protocol, initiator, pre_state, post_state, result, error_code,
+			source_ip, resource_type, resource_id, role, name, detail
+		) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		timeText(nowUTC()),
+		event.CallerOwner,
+		event.OperationID,
+		nullableString(event.RequestID),
+		event.Action,
+		event.Result,
+		nullableString(event.ErrorCode),
+		nullableString(event.RemoteAddr),
+		nullableString(event.ResourceType),
+		nullableString(event.ResourceID),
+		nullableString(event.Role),
+		nullableString(event.Name),
+		nullableString(event.Detail),
+	)
+	return mapError(err)
+}
+
+func (tx *sqlTx) DeleteAuditBefore(before time.Time) (int64, error) {
+	result, err := tx.tx.ExecContext(tx.ctx,
+		`DELETE FROM audit WHERE id IN (
+			SELECT id FROM audit WHERE timestamp < ? ORDER BY timestamp LIMIT 100
+		)`, timeText(before))
+	if err != nil {
+		return 0, mapError(err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, mapError(err)
+	}
+	return affected, nil
 }
