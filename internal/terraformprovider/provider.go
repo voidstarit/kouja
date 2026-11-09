@@ -142,7 +142,11 @@ func (p *koujaProvider) Configure(ctx context.Context, request provider.Configur
 	response.ResourceData = response.DataSourceData
 }
 
-func (p *koujaProvider) DataSources(context.Context) []func() datasource.DataSource { return nil }
+func (p *koujaProvider) DataSources(context.Context) []func() datasource.DataSource {
+	return []func() datasource.DataSource{
+		func() datasource.DataSource { return &volumeGroupDataSource{} },
+	}
+}
 
 func (p *koujaProvider) Resources(context.Context) []func() resource.Resource {
 	return []func() resource.Resource{

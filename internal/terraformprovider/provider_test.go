@@ -25,6 +25,9 @@ func TestProviderMetadataSchemaAndResources(t *testing.T) {
 	if len(instance.Resources(context.Background())) != 3 {
 		t.Fatalf("resources = %d, want 3", len(instance.Resources(context.Background())))
 	}
+	if len(instance.DataSources(context.Background())) != 1 {
+		t.Fatalf("data sources = %d, want 1", len(instance.DataSources(context.Background())))
+	}
 }
 
 func TestResolveMaterialRejectsBothForms(t *testing.T) {
