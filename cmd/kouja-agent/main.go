@@ -139,6 +139,7 @@ func run() error {
 		NVMePortals:    cfg.Targets.NVMeTCP.Portals,
 		Ready:          ready.Load,
 		Admission:      admission,
+		Capabilities:   []string{"certificates", "storage_classes"},
 		StorageClasses: cfg.Storage.Classes,
 		Classes:        classMap,
 	})

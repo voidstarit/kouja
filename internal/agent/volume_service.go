@@ -39,6 +39,7 @@ type ServiceOptions struct {
 	NVMePortals  []config.Portal
 	Ready        func() bool
 	Admission    *Admission
+	Capabilities []string
 	// StorageClasses maps a stable class name to an LVM volume group.
 	// Deprecated: use Classes for live mappings. It remains as a fallback for
 	// tests and callers that only need a static map.
@@ -494,7 +495,7 @@ func (service *VolumeService) ListStorageClasses(ctx context.Context, _ *koujav1
 	return response, nil
 }
 
-func (service *VolumeService) GetInfo(context.Context, *koujav1.GetInfoRequest) (*koujav1.GetInfoResponse, error) {
+func (service *VolumeService) GetInfo(ctx context.Context, _ *koujav1.GetInfoRequest) (*koujav1.GetInfoResponse, error) {
 	protocols := make([]koujav1.Protocol, 0, 2)
 	if service.options.ISCSIEnabled {
 		protocols = append(protocols, koujav1.Protocol_PROTOCOL_ISCSI)
@@ -506,10 +507,16 @@ func (service *VolumeService) GetInfo(context.Context, *koujav1.GetInfoRequest) 
 	if service.options.Ready != nil {
 		ready = service.options.Ready()
 	}
+	callerRole, callerOwner := "", ""
+	if identity, ok := IdentityFromContext(ctx); ok {
+		callerRole = string(identity.Role)
+		callerOwner = identity.Owner
+	}
 	return &koujav1.GetInfoResponse{
 		HostUuid: service.options.HostUUID, AgentVersion: service.options.AgentVersion,
 		ApiVersion: service.options.APIVersion, Protocols: protocols,
 		AuthModes: []string{"mtls"}, Ready: ready,
+		Capabilities: service.options.Capabilities, CallerRole: callerRole, CallerOwner: callerOwner,
 	}, nil
 }
 
