@@ -1,0 +1,13 @@
+[Unit]
+Description=kouja recovery backup worker
+After=network-online.target kouja-agent.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+KeyringMode=shared
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+ExecStart=/usr/local/bin/kouja-backup --config /etc/kouja/config.yaml

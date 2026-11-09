@@ -160,7 +160,7 @@ internal/auth/              mTLS identity and role mapping
 internal/observability/     metrics, structured logs, readiness
 internal/config/            YAML configuration
 internal/csi/               CSI controller, node, inventory, and client
-deploy/systemd/             agent unit and tmpfiles
+deploy/systemd/             agent, backup, and tmpfiles units
 deploy/kubernetes/          CSIDriver, RBAC, controller, node, StorageClass
 ```
 
@@ -854,7 +854,7 @@ state:
 
 The admin API registers VGs at runtime. The `storage.vgs` list seeds VGs on first start only. After first start, the admin API is authoritative; a config entry that differs is a warning, not a fatal error. A configured VG that no longer exists marks its volumes `drift`. Portal changes require an agent restart in the first version. The backup retention keys control the 15-minute, daily, and weekly backup tiers.
 
-The backup job requires `backup_target` to be a writable off-host mount path. It writes `VACUUM INTO` to a temporary file, fsyncs it, and atomically renames it into the target. It validates the target before each run and exposes last-success and failure metrics.
+The standalone `kouja-backup` worker requires `backup_target` to be a writable off-host mount path. It opens the live database read-only, writes `VACUUM INTO` to a temporary file, fsyncs it, and atomically renames it into the target. It validates the target before each run and is scheduled by `kouja-backup.timer` rather than running inside the agent.
 
 ### Failure handling summary
 
@@ -1612,6 +1612,7 @@ service AdminService {
 | `deploy/kubernetes/csidriver.yaml` | `attachRequired: true`, `podInfoOnMount: true`, `volumeLifecycleModes: [Persistent]`, `fsGroupPolicy: None`, `requiresRepublish: false`. |
 | `deploy/systemd/kouja-agent.service` | `ExecStart=/usr/local/bin/kouja-agent --config /etc/kouja/config.yaml`, `Restart=on-failure`, `LimitNOFILE=1048576`, `After=network-online.target`, `Wants=network-online.target`, `User=root`, and `[Install] WantedBy=multi-user.target`. |
 | `deploy/systemd/kouja-agent.conf` | Installed as `/etc/tmpfiles.d/kouja-agent.conf`; creates `/var/lib/kouja` 0700 root:root and `/var/lib/kouja/backups` 0700 root:root. |
+| `deploy/systemd/kouja-backup.service` and `.timer` | Run the standalone read-only backup worker every 15 minutes; the timer is enabled by the installer. |
 | `deploy/install/install.sh` | Installs the binary at `/usr/local/bin/kouja-agent`, config at `/etc/kouja/config.yaml`, TLS material at `/etc/kouja/tls` (directory 0700, files 0600), the systemd unit, and tmpfiles; disables `target.service` and `targetcli saveconfig`; creates the data and backup directories; enables and starts the service; applies firewall rules; prints an uninstall procedure. |
 
 Sidecar arguments:
@@ -1646,7 +1647,7 @@ CRD schema: `spec.placementKey` (string, required), `spec.csiVolumeName` (string
 | `test/perf/benchmark_test.go` | 1 TiB create/export/delete p99, 100-volume restore. | 3 | `make perf` |
 | `test/upgrade/older_binary_test.go` | Older binary refuses newer schema; handle compatibility. | 3 | `make upgrade` |
 
-`make test` uses `go test -tags=unit ./...`; integration, e2e, fault, perf, and upgrade files carry `//go:build integration`, `//go:build e2e`, `//go:build fault`, `//go:build perf`, and `//go:build upgrade`. Coverage uses `go test -coverprofile` statement coverage: at least 80% for `internal/state`, `internal/operations`, `internal/lvm`, `internal/target`, and `internal/csi`, and at least 75% overall. Fault injection uses a build-tag `fault` failpoint interface in `internal/operations/failpoint.go`; the e2e environment is a prepared VM with the agent installed, a DNS SRV record, and the TLS secrets mounted.
+`make test` uses `go test -tags=unit ./...`; integration, e2e, fault, perf, and upgrade files carry `//go:build integration`, `//go:build e2e`, `//go:build fault`, `//go:build perf`, and `//go:build upgrade`. Coverage uses `go test -coverprofile` statement coverage: at least 80% for `internal/state`, `internal/operations`, `internal/lvm`, `internal/target`, and `internal/csi`, and at least 80% overall. Fault injection uses a build-tag `fault` failpoint interface in `internal/operations/failpoint.go`; the e2e environment is a prepared VM with the agent installed, a DNS SRV record, and the TLS secrets mounted.
 
 The integration and fault suites run on a self-hosted Linux runner labeled `kouja-storage` with root, loop devices, LIO, nvmet, and `ktls-utils`. The e2e suite runs on a kind cluster with the agent VM, DNS SRV record, per-node certificates, and TLS secrets. The performance and upgrade suites run on the reference host with the previous release artifact.
 
@@ -1847,7 +1848,7 @@ The integration and fault suites run on a self-hosted Linux runner labeled `kouj
 * **Protobuf**: `buf lint` passes, `buf generate` produces no diff, and `buf breaking` uses the committed Stage 1 baseline. It is enforced from the first release tag.
 * **Unit Tests**: `make test` runs `go test -tags=unit ./...`. Table-driven tests cover state transitions, ensure semantics, error mapping, LVM parsing, configfs ordering, credential formats, grant expiry, placement records, admission, and CSI handlers.
 * **Static Analysis & Linting**: `go vet ./...` and `golangci-lint run` pass with the configured linters.
-* **Test Coverage**: `make coverage` uses `go test -coverprofile` statement coverage. The gate is at least 80% for `internal/state`, `internal/operations`, `internal/lvm`, `internal/target`, and `internal/csi`, and at least 75% overall.
+* **Test Coverage**: `make coverage` uses `go test -coverprofile` statement coverage. The gate is at least 80% for `internal/state`, `internal/operations`, `internal/lvm`, `internal/target`, and `internal/csi`, and at least 80% overall.
 * **Stage 1 Integration**: `make integration` runs on a disposable root VM with loop devices, LIO, and `ktls-utils`. It covers iSCSI create, export, login, read, write, delete, restart restore, drift, VG registration, and backup/restore. Import, wipe, grow, and shrink are Stage 3.
 * **Stage 2 Integration and Conformance**: `make integration` adds NVMe-oF/TLS-PSK. `make csi-sanity` and `make e2e` pass for the advertised capabilities. The e2e test provisions, mounts, and deletes an iSCSI PV in stage 1 of the CSI work and an NVMe-oF PV in stage 2.
 * **Failure Injection**: `make fault` runs the `fault` build-tag failpoints and kills the agent after each journaled step. Every case must either complete on restart or land in a deterministic `failed` or `drift` state with no duplicate LV, target, namespace, or credential. A post-side-effect database failure must produce an emergency-log record and a `drift` state.

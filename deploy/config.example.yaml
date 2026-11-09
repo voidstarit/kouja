@@ -76,12 +76,24 @@ admission:
 
 state:
   backup_dir: /var/lib/kouja/backups
-  # Set to an off-host writable mount for backups, or leave empty to disable.
+  # Set to an off-host writable mount for backups. Empty uses backup_dir.
   backup_target: ""
-  backup_interval_seconds: 900
+  backup_interval_seconds: 900   # keep in sync with kouja-backup.timer
   backup_retention_short: 96
   backup_retention_daily: 7
   backup_retention_weekly: 4
   integrity_check_interval_seconds: 86400
   reconcile_interval_seconds: 60
   audit_retention_days: 90
+  s3_backup:
+    enabled: false
+    bucket: ''
+    prefix: kouja/
+    region: ''
+    endpoint: ''
+    force_path_style: false
+    server_side_encryption: AES256
+    kms_key_id: ''
+    per_backup_folder: true   # group each backup under YYYYMMMDDHHmm/
+    retention_days: 7
+    encryption_key_file: ''

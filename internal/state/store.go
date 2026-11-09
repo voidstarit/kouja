@@ -181,6 +181,63 @@ func SchemaVersion() int {
 // Backup writes a consistent copy of the database using VACUUM INTO. The
 // destination must not already exist. The copy is synced and mode 0600.
 func (s *Store) Backup(ctx context.Context, destination string) error {
+	return vacuumInto(ctx, s.db, destination)
+}
+
+// Snapshot is the read-only snapshot contract used by the backup worker.
+func (s *Store) Snapshot(ctx context.Context, destination string) error {
+	return s.Backup(ctx, destination)
+}
+
+// SnapshotSource reads the live database without running migrations or any
+// other writes. It is intended for an external backup worker that must not
+// modify the database owned by the agent.
+type SnapshotSource struct {
+	db *sql.DB
+}
+
+// OpenSnapshotSource opens path read-only with a busy timeout so a backup
+// worker can snapshot a database that the agent is actively using.
+func OpenSnapshotSource(ctx context.Context, path string) (*SnapshotSource, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, fmt.Errorf("%w: empty database path", ErrInvalid)
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	params := url.Values{}
+	params.Set("mode", "ro")
+	params.Add("_pragma", "busy_timeout(15000)")
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?"+params.Encode())
+	if err != nil {
+		return nil, fmt.Errorf("state: open snapshot source: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("state: connect snapshot source: %w", err)
+	}
+	return &SnapshotSource{db: db}, nil
+}
+
+// Snapshot writes a consistent copy while leaving the source untouched.
+func (s *SnapshotSource) Snapshot(ctx context.Context, destination string) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("%w: snapshot source is not open", ErrInvalid)
+	}
+	return vacuumInto(ctx, s.db, destination)
+}
+
+// Close releases the read-only connection.
+func (s *SnapshotSource) Close() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	return s.db.Close()
+}
+
+func vacuumInto(ctx context.Context, db *sql.DB, destination string) error {
 	if destination == "" {
 		return fmt.Errorf("%w: empty backup destination", ErrInvalid)
 	}
@@ -190,7 +247,7 @@ func (s *Store) Backup(ctx context.Context, destination string) error {
 		return fmt.Errorf("state: inspect backup destination: %w", err)
 	}
 	quoted := strings.ReplaceAll(destination, "'", "''")
-	if _, err := s.db.ExecContext(ctx, "VACUUM INTO '"+quoted+"'"); err != nil { //nolint:gosec // SQLite VACUUM INTO cannot bind a filename; the value is quote-escaped
+	if _, err := db.ExecContext(ctx, "VACUUM INTO '"+quoted+"'"); err != nil { //nolint:gosec // SQLite VACUUM INTO cannot bind a filename; the value is quote-escaped
 		return fmt.Errorf("state: vacuum into %q: %w", destination, err)
 	}
 	file, err := os.OpenFile(destination, os.O_RDONLY, 0) //nolint:gosec // destination is the validated backup output

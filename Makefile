@@ -9,7 +9,7 @@ VERSION ?= $(shell git describe --tags --always --dirty)
 PROVIDER_PACKAGES ?= ./cmd/terraform-provider-kouja/... ./internal/terraformprovider/...
 # The Terraform provider is a separate deliverable with its own test target.
 COVERAGE_PACKAGES ?= $(shell $(GO) list ./internal/... | grep -v '/internal/terraformprovider$$')
-COVERAGE_FLOOR ?= 75
+COVERAGE_FLOOR ?= 80
 # Runtime files such as bin/clients may live under the repository root. Go's
 # ./... wildcard walks those directories too, so local build and test commands
 # use explicit source package roots instead.
@@ -23,8 +23,10 @@ all: binaries
 binaries: build
 	mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 $(GO) build -trimpath -o $(BIN_DIR)/kouja-agent ./cmd/kouja-agent
+	CGO_ENABLED=0 $(GO) build -trimpath -o $(BIN_DIR)/kouja-backup ./cmd/kouja-backup
 	CGO_ENABLED=0 $(GO) build -trimpath -o $(BIN_DIR)/kouja-csi-controller ./cmd/kouja-csi-controller
 	CGO_ENABLED=0 $(GO) build -trimpath -o $(BIN_DIR)/kouja-csi-node ./cmd/kouja-csi-node
+	CGO_ENABLED=0 $(GO) build -trimpath -o $(BIN_DIR)/kouja-restore ./cmd/kouja-restore
 	install -m 0644 deploy/config.example.yaml $(BIN_DIR)/config.example.yaml
 	install -m 0755 deploy/kouja-init.sh $(BIN_DIR)/kouja-init.sh
 

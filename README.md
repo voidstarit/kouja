@@ -145,8 +145,10 @@ To create standalone binaries explicitly:
 ```sh
 mkdir -p bin
 CGO_ENABLED=0 go build -trimpath -o bin/kouja-agent ./cmd/kouja-agent
+CGO_ENABLED=0 go build -trimpath -o bin/kouja-backup ./cmd/kouja-backup
 CGO_ENABLED=0 go build -trimpath -o bin/kouja-csi-controller ./cmd/kouja-csi-controller
 CGO_ENABLED=0 go build -trimpath -o bin/kouja-csi-node ./cmd/kouja-csi-node
+CGO_ENABLED=0 go build -trimpath -o bin/kouja-restore ./cmd/kouja-restore
 ```
 
 Protocol generation and CRD generation require the tools installed by
@@ -326,12 +328,12 @@ sudo ./deploy/install/install.sh bin/kouja-agent
 
 The installer:
 
-- installs the binary at `/usr/local/bin/kouja-agent`;
-- installs the systemd unit and tmpfiles configuration;
+- installs `kouja-agent`, `kouja-backup`, and `kouja-restore` when built;
+- installs the systemd units, backup timer, and tmpfiles configuration;
 - creates `/etc/kouja`, `/var/lib/kouja`, and the backup directory;
 - creates a starter `/etc/kouja/config.yaml` if one does not exist;
 - disables the legacy `target.service`;
-- enables and starts `kouja-agent.service`.
+- enables and starts `kouja-agent.service` and `kouja-backup.timer`.
 
 The installer itself does **not** create certificates or register volume
 groups; `kouja-init.sh` is the separate interactive helper for that. If you
@@ -660,8 +662,10 @@ runs unit tests, the coverage gate, formatting, `go vet`, and `golangci-lint`.
 - **Credentials:** `/var/lib/kouja/secret.key` is separate from SQLite and must
   be backed up independently. Without it, encrypted credentials cannot be
   recovered.
-- **Backups:** set `state.backup_target` to an off-host directory. Backups
-  include the database, key, host ID, and a `restore.json` manifest.
+- **Backups:** `kouja-backup` runs from `kouja-backup.timer`. Set
+  `state.backup_target` to an off-host directory. Backups include the database,
+  key, host ID, and a `restore.json` manifest. The worker does not run inside
+  `kouja-agent`.
 - **Health:** `/healthz` is liveness; `/readyz` reflects reconciliation
   readiness; `/metrics` exposes Prometheus metrics.
 - **Drift:** if an LV, target, ACL, namespace, size, or initiator disagrees with
@@ -683,7 +687,7 @@ iSCSI. NVMe/TCP uses TLS 1.3.
 ## Repository layout
 
 ```text
-cmd/                         agent and CSI entry points
+cmd/                         agent, backup, restore, and CSI entry points
 internal/agent/              API services, reconciliation, admission, startup
 internal/lvm/                LVM command backend
 internal/target/             direct configfs iSCSI and nvmet adapters
@@ -693,7 +697,7 @@ internal/credential/         encrypted credential storage and rotation
 internal/csi/                CSI controller and node implementation
 proto/kouja/v1/              protobuf API contract
 deploy/kubernetes/           CRD and CSI manifests
-deploy/systemd/              agent service unit
+deploy/systemd/              agent, backup service, and timer units
 test/                        unit, integration, e2e, fault, and CSI suites
 docs/                        design, kernel, CSI, and validation records
 ```
