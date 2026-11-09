@@ -27,7 +27,7 @@ button {
   border-radius: 6px;
   background: #fff;
   color: inherit;
-  padding: 0.45rem 0.8rem;
+  padding: 0.55rem 0.9rem;
   cursor: pointer;
 }
 
@@ -72,13 +72,18 @@ textarea {
   border-radius: 6px;
   background: #fff;
   color: inherit;
-  padding: 0.45rem 0.6rem;
+  padding: 0.55rem 0.7rem;
+}
+
+textarea {
+  width: 100%;
+  line-height: 1.5;
 }
 
 .app {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 1.25rem;
+  padding: 2rem 1.5rem;
 }
 
 .app-header {
@@ -86,7 +91,7 @@ textarea {
   justify-content: space-between;
   gap: 1rem;
   align-items: flex-start;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 h1,
@@ -110,39 +115,48 @@ h3 {
 
 .tabs {
   display: flex;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.tabs button {
+  min-width: 7rem;
 }
 
 .stack {
   display: grid;
-  gap: 1rem;
+  gap: 1.5rem;
 }
 
 .card {
   background: #fff;
   border: 1px solid #d5dce4;
-  border-radius: 10px;
-  padding: 1rem;
+  border-radius: 12px;
+  padding: 1.5rem;
   box-shadow: 0 1px 2px rgb(16 24 40 / 6%);
+}
+
+.card > h2 {
+  margin-bottom: 1rem;
 }
 
 .section-heading {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 1.25rem;
   align-items: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1.25rem 2rem;
 }
 
 .grid > div {
   display: grid;
-  gap: 0.15rem;
+  gap: 0.35rem;
 }
 
 .muted {
@@ -159,6 +173,7 @@ h3 {
 .table-scroll {
   overflow-x: auto;
   max-width: 100%;
+  margin-top: 1rem;
 }
 
 table {
@@ -170,7 +185,7 @@ table {
 th,
 td {
   border-bottom: 1px solid #e5e9ee;
-  padding: 0.55rem 0.5rem;
+  padding: 0.75rem 0.65rem;
   text-align: left;
   vertical-align: top;
   font-size: 0.9rem;
@@ -278,13 +293,41 @@ tr:last-child td {
 .form-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.75rem;
   align-items: center;
-  margin: 0.75rem 0;
+  margin: 1rem 0;
 }
 
 .form-row input {
-  min-width: 180px;
+  min-width: 200px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem 1.25rem;
+  align-items: end;
+  margin: 1rem 0;
+}
+
+.field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+.field-hint {
+  color: #5d6b7a;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.form-grid textarea {
+  min-height: 8rem;
+  resize: vertical;
 }
 
 .editor {
@@ -321,7 +364,7 @@ summary {
 
 .field-label {
   display: block;
-  margin: 0.75rem 0 0.35rem;
+  margin: 1rem 0 0.5rem;
   font-weight: 600;
 }
 
@@ -331,6 +374,18 @@ summary {
   }
 
   .tabs {
-    margin-top: 0.75rem;
+    margin-top: 1rem;
+  }
+
+  .app {
+    padding: 1.25rem 1rem;
+  }
+
+  .card {
+    padding: 1.15rem;
+  }
+
+  .form-row input {
+    min-width: 100%;
   }
 }
