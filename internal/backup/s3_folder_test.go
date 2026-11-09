@@ -34,8 +34,16 @@ func TestS3PerBackupFolder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := "prefix/2026Nov091200/kouja-20261109T120000.000000000Z.tar.gz"
+	expected := "prefix/2026Nov091200/restore.json"
 	if result.S3Key != expected || uploader.key != expected {
 		t.Fatalf("key = %q / %q, want %q", result.S3Key, uploader.key, expected)
+	}
+	if want := now.AddDate(0, 0, -7); !uploader.cutoff.Equal(want) {
+		t.Fatalf("retention cutoff = %v, want %v", uploader.cutoff, want)
+	}
+	for _, name := range []string{"state.db", "restore.json"} {
+		if _, ok := uploader.uploads["prefix/2026Nov091200/"+name]; !ok {
+			t.Fatalf("missing folder object %s: %v", name, uploader.uploads)
+		}
 	}
 }

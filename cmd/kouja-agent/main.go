@@ -304,6 +304,8 @@ func runBackups(ctx context.Context, store *state.Store, cfg *config.Config, con
 			ForcePathStyle:       cfg.State.S3Backup.ForcePathStyle,
 			ServerSideEncryption: cfg.State.S3Backup.ServerSideEncryption,
 			KMSKeyID:             cfg.State.S3Backup.KMSKeyID,
+			PerBackupFolder:      cfg.State.S3Backup.PerBackupFolder,
+			RetentionDays:        cfg.State.S3Backup.RetentionDays,
 		}
 	}
 	manager, err := backup.New(store, backup.Options{
@@ -317,6 +319,7 @@ func runBackups(ctx context.Context, store *state.Store, cfg *config.Config, con
 		RevocationLogName:  "revoked-serials.log",
 		ArchiveFiles:       archiveFiles,
 		ArchiveDirs:        archiveDirs,
+		EncryptionKeyFile:  cfg.State.S3Backup.EncryptionKeyFile,
 		S3:                 s3Options,
 	})
 	if err != nil {

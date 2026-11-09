@@ -94,4 +94,6 @@ state:
     force_path_style: false
     server_side_encryption: AES256
     kms_key_id: ''
-    per_backup_folder: true
+    per_backup_folder: true   # group each backup under YYYYMMMDDHHmm/
+    retention_days: 7
+    encryption_key_file: ''

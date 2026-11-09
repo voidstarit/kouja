@@ -12,7 +12,8 @@ func TestS3BackupDefaultsAndValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cfg.State.S3Backup.Enabled || cfg.State.S3Backup.Prefix != "kouja/" ||
-		cfg.State.S3Backup.ServerSideEncryption != "AES256" || !cfg.State.S3Backup.PerBackupFolder {
+		cfg.State.S3Backup.ServerSideEncryption != "AES256" || !cfg.State.S3Backup.PerBackupFolder ||
+		cfg.State.S3Backup.RetentionDays != 7 || cfg.State.S3Backup.EncryptionKeyFile != "" {
 		t.Fatalf("defaults = %#v", cfg.State.S3Backup)
 	}
 	cfg, err = Parse([]byte(validConfig + `
@@ -25,12 +26,15 @@ state:
     server_side_encryption: aws:kms
     kms_key_id: alias/kouja
     per_backup_folder: false
+    retention_days: 14
+    encryption_key_file: /etc/kouja/backup.key
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !cfg.State.S3Backup.Enabled || cfg.State.S3Backup.Bucket != "kouja-backups" ||
-		cfg.State.S3Backup.KMSKeyID != "alias/kouja" || cfg.State.S3Backup.PerBackupFolder {
+		cfg.State.S3Backup.KMSKeyID != "alias/kouja" || cfg.State.S3Backup.PerBackupFolder ||
+		cfg.State.S3Backup.RetentionDays != 14 || cfg.State.S3Backup.EncryptionKeyFile != "/etc/kouja/backup.key" {
 		t.Fatalf("s3 config = %#v", cfg.State.S3Backup)
 	}
 	for _, test := range []struct{ name, extra, want string }{
@@ -38,6 +42,8 @@ state:
 		{"bad encryption", "\nstate:\n  s3_backup:\n    enabled: true\n    bucket: b\n    server_side_encryption: none\n", "server_side_encryption"},
 		{"missing kms key", "\nstate:\n  s3_backup:\n    enabled: true\n    bucket: b\n    server_side_encryption: aws:kms\n", "kms_key_id"},
 		{"bad endpoint", "\nstate:\n  s3_backup:\n    enabled: true\n    bucket: b\n    endpoint: not-a-url\n", "endpoint"},
+		{"bad retention", "\nstate:\n  s3_backup:\n    enabled: true\n    bucket: b\n    retention_days: 0\n", "retention_days"},
+		{"relative key", "\nstate:\n  s3_backup:\n    enabled: true\n    bucket: b\n    encryption_key_file: backup.key\n", "encryption_key_file"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := Parse([]byte(validConfig + test.extra))

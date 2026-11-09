@@ -163,6 +163,8 @@ type S3BackupConfig struct {
 	ServerSideEncryption string `yaml:"server_side_encryption"`
 	KMSKeyID             string `yaml:"kms_key_id"`
 	PerBackupFolder      bool   `yaml:"per_backup_folder"`
+	RetentionDays        int    `yaml:"retention_days"`
+	EncryptionKeyFile    string `yaml:"encryption_key_file"`
 }
 
 func Default() Config {
@@ -234,6 +236,7 @@ func Default() Config {
 				Prefix:               "kouja/",
 				ServerSideEncryption: "AES256",
 				PerBackupFolder:      true,
+				RetentionDays:        7,
 			},
 		},
 		CertificateAuthority: CertificateAuthorityConfig{
@@ -412,6 +415,14 @@ func (cfg *Config) Validate() error {
 		}
 		if cfg.State.S3Backup.ServerSideEncryption == "aws:kms" && strings.TrimSpace(cfg.State.S3Backup.KMSKeyID) == "" {
 			return fmt.Errorf("%w: state.s3_backup.kms_key_id is required for aws:kms", ErrInvalid)
+		}
+		if cfg.State.S3Backup.RetentionDays <= 0 {
+			return fmt.Errorf("%w: state.s3_backup.retention_days must be positive", ErrInvalid)
+		}
+		if cfg.State.S3Backup.EncryptionKeyFile != "" {
+			if err := requireAbsolute("state.s3_backup.encryption_key_file", cfg.State.S3Backup.EncryptionKeyFile); err != nil {
+				return err
+			}
 		}
 		if cfg.State.S3Backup.Endpoint != "" {
 			parsed, err := url.Parse(cfg.State.S3Backup.Endpoint)

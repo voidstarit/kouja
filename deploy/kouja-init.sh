@@ -455,6 +455,9 @@ q() { yaml_quote "$1"; }
   echo "    force_path_style: false"
   echo "    server_side_encryption: AES256"
   echo "    kms_key_id: \"\""
+  echo "    per_backup_folder: true"
+  echo "    retention_days: 7"
+  echo "    encryption_key_file: \"\""
 } >"$TMP_CONFIG"
 
 AGENT_BIN="${KOUJA_AGENT_BIN:-$SCRIPT_DIR/kouja-agent}"

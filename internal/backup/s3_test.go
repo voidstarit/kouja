@@ -1,27 +1,43 @@
 package backup
 
 import (
-	"archive/tar"
-	"compress/gzip"
 	"context"
-	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
 
 type recordingUploader struct {
-	path string
-	key  string
+	path    string
+	key     string
+	cutoff  time.Time
+	uploads map[string]string
+	data    map[string][]byte
 }
 
 func (u *recordingUploader) Upload(_ context.Context, path, key string) error {
 	u.path, u.key = path, key
+	if u.uploads == nil {
+		u.uploads = make(map[string]string)
+		u.data = make(map[string][]byte)
+	}
+	data, err := os.ReadFile(path) //nolint:gosec // test path
+	if err != nil {
+		return err
+	}
+	u.uploads[key] = path
+	u.data[key] = data
 	return nil
 }
 
-func TestS3ArchiveContainsRecoveryInputs(t *testing.T) {
+func (u *recordingUploader) DeleteBefore(_ context.Context, cutoff time.Time) error {
+	u.cutoff = cutoff
+	return nil
+}
+
+func TestS3UploadsPlainRecoveryInputs(t *testing.T) {
 	store := openBackupStore(t)
 	dir := t.TempDir()
 	hostID := filepath.Join(dir, "host-id")
@@ -60,37 +76,17 @@ func TestS3ArchiveContainsRecoveryInputs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ArchivePath == "" || result.S3Key != "prefix/kouja-20261109T120000.000000000Z.tar.gz" {
-		t.Fatalf("result = %#v", result)
+	manifestKey := "prefix/kouja-20261109T120000.000000000Z-restore.json"
+	if result.S3Key != manifestKey || uploader.key != manifestKey {
+		t.Fatalf("result = %#v, upload key = %q", result, uploader.key)
 	}
-	if uploader.path != result.ArchivePath || uploader.key != result.S3Key {
-		t.Fatalf("upload = %q %q", uploader.path, uploader.key)
-	}
-	file, err := os.Open(result.ArchivePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = file.Close() }()
-	gzipReader, err := gzip.NewReader(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = gzipReader.Close() }()
-	reader := tar.NewReader(gzipReader)
-	names := map[string]bool{}
-	for {
-		header, err := reader.Next()
-		if err == io.EOF {
-			break
+	for _, name := range []string{"state.db", "config.yaml", "emergency.log", "certificates/admin.crt"} {
+		key := "prefix/kouja-20261109T120000.000000000Z-" + strings.ReplaceAll(name, "/", "-")
+		if _, ok := uploader.uploads[key]; !ok {
+			t.Fatalf("missing uploaded object %s: %v", key, uploader.uploads)
 		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		names[header.Name] = true
 	}
-	for _, name := range []string{"state.db", "config.yaml", "emergency.log", "certificates/admin.crt", "restore.json"} {
-		if !names[name] {
-			t.Fatalf("archive missing %s: %v", name, names)
-		}
+	if _, ok := uploader.uploads[manifestKey]; !ok {
+		t.Fatalf("missing manifest upload: %v", uploader.uploads)
 	}
 }
