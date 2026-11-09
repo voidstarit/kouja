@@ -4,30 +4,30 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
+	"net/http"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/voidstarit/kouja/internal/state"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	otelprom "go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
-// OTelOptions configures the optional OTLP metrics exporter. Per-volume
-// metrics are collected asynchronously from Volumes when the SDK exports.
+// OTelOptions configures the optional pull-based OpenTelemetry metrics
+// registry. The agent exposes the registry on its mTLS /metrics endpoint; an
+// OpenTelemetry Collector (or Prometheus) scrapes it.
 type OTelOptions struct {
 	Enabled        bool
-	Endpoint       string
-	Insecure       bool
-	Headers        map[string]string
-	Interval       time.Duration
 	ServiceName    string
 	ServiceVersion string
 	HostUUID       string
 	StorageClass   func(vg string) string
 	Volumes        func(context.Context) ([]state.VolumeStatus, error)
+	Metrics        *Metrics
 	Logger         *slog.Logger
 }
 
@@ -41,14 +41,16 @@ type otelInstruments struct {
 	info           metric.Int64ObservableGauge
 }
 
-// OTel owns the OpenTelemetry meter provider and its exporter lifecycle.
+// OTel owns the OpenTelemetry meter provider and its Prometheus registry.
 type OTel struct {
 	provider    *sdkmetric.MeterProvider
 	opts        OTelOptions
 	instruments *otelInstruments
+	handler     http.Handler
 }
 
-// NewOTel creates an OTLP/gRPC metrics pipeline. It returns nil when disabled.
+// NewOTel creates a pull-based Prometheus registry backed by OpenTelemetry
+// instruments. It returns nil when disabled.
 func NewOTel(ctx context.Context, opts OTelOptions) (*OTel, error) {
 	if !opts.Enabled {
 		return nil, nil
@@ -56,38 +58,27 @@ func NewOTel(ctx context.Context, opts OTelOptions) (*OTel, error) {
 	if opts.Volumes == nil {
 		return nil, fmt.Errorf("observability: volume source is required")
 	}
-	if opts.Interval <= 0 {
-		opts.Interval = 30 * time.Second
-	}
 	if opts.ServiceName == "" {
 		opts.ServiceName = "kouja-agent"
 	}
-	exporterOptions := make([]otlpmetricgrpc.Option, 0, 3)
-	if opts.Endpoint != "" {
-		exporterOptions = append(exporterOptions, otlpmetricgrpc.WithEndpoint(opts.Endpoint))
-	}
-	if opts.Insecure {
-		exporterOptions = append(exporterOptions, otlpmetricgrpc.WithInsecure())
-	}
-	if len(opts.Headers) > 0 {
-		exporterOptions = append(exporterOptions, otlpmetricgrpc.WithHeaders(opts.Headers))
-	}
-	exporterCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	exporter, err := otlpmetricgrpc.New(exporterCtx, exporterOptions...)
-	cancel()
+	registry := prometheus.NewRegistry()
+	exporter, err := otelprom.New(otelprom.WithRegisterer(registry))
 	if err != nil {
-		return nil, fmt.Errorf("observability: create OTLP exporter: %w", err)
+		return nil, fmt.Errorf("observability: create Prometheus exporter: %w", err)
 	}
-	reader := sdkmetric.NewPeriodicReader(exporter,
-		sdkmetric.WithInterval(opts.Interval),
-		sdkmetric.WithTimeout(10*time.Second),
-	)
-	provider := newMeterProvider(reader, opts)
+	provider := newMeterProvider(exporter, opts)
 	reporter, err := newOTelWithProvider(provider, opts)
 	if err != nil {
 		_ = provider.Shutdown(context.Background())
 		return nil, err
 	}
+	if opts.Metrics != nil {
+		if err := registry.Register(newLegacyCollector(opts.Metrics)); err != nil {
+			_ = provider.Shutdown(context.Background())
+			return nil, fmt.Errorf("observability: register legacy metrics: %w", err)
+		}
+	}
+	reporter.handler = promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
 	otel.SetMeterProvider(provider)
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
 		logger := opts.Logger
@@ -168,7 +159,7 @@ func newOTelWithProvider(provider *sdkmetric.MeterProvider, opts OTelOptions) (*
 	return reporter, nil
 }
 
-// newOTelWithReader is used by tests and by alternate meter providers.
+// newOTelWithReader is used by tests to inspect metric data directly.
 func newOTelWithReader(reader sdkmetric.Reader, opts OTelOptions) (*OTel, error) {
 	provider := newMeterProvider(reader, opts)
 	reporter, err := newOTelWithProvider(provider, opts)
@@ -237,10 +228,51 @@ func boolInt64(value bool) int64 {
 	return 0
 }
 
-// Shutdown flushes and stops the metrics reader and exporter.
+// Handler returns the Prometheus scrape handler containing OTel and legacy
+// kouja metrics.
+func (reporter *OTel) Handler() http.Handler {
+	if reporter == nil || reporter.handler == nil {
+		return http.NotFoundHandler()
+	}
+	return reporter.handler
+}
+
+// Shutdown flushes and stops the metric provider.
 func (reporter *OTel) Shutdown(ctx context.Context) error {
 	if reporter == nil || reporter.provider == nil {
 		return nil
 	}
 	return reporter.provider.Shutdown(ctx)
+}
+
+type legacyCollector struct{ metrics *Metrics }
+
+func newLegacyCollector(metrics *Metrics) *legacyCollector {
+	return &legacyCollector{metrics: metrics}
+}
+
+func (collector *legacyCollector) Describe(ch chan<- *prometheus.Desc) {
+	counters, gauges := collector.metrics.Snapshot()
+	for name := range counters {
+		ch <- prometheus.NewDesc(name, name, nil, nil)
+	}
+	for name := range gauges {
+		if _, ok := counters[name]; ok {
+			continue
+		}
+		ch <- prometheus.NewDesc(name, name, nil, nil)
+	}
+}
+
+func (collector *legacyCollector) Collect(ch chan<- prometheus.Metric) {
+	counters, gauges := collector.metrics.Snapshot()
+	for name, value := range counters {
+		ch <- prometheus.MustNewConstMetric(prometheus.NewDesc(name, name, nil, nil), prometheus.CounterValue, float64(value))
+	}
+	for name, value := range gauges {
+		if _, ok := counters[name]; ok {
+			continue
+		}
+		ch <- prometheus.MustNewConstMetric(prometheus.NewDesc(name, name, nil, nil), prometheus.GaugeValue, value)
+	}
 }

@@ -76,11 +76,7 @@ admission:
 observability:
   otel:
     enabled: false
-    endpoint: ""          # OTLP/gRPC host:port, e.g. otel-collector:4317
-    insecure: false       # true for a plaintext local collector
-    interval_seconds: 30
     service_name: kouja-agent
-    headers: {}
 
 state:
   backup_dir: /var/lib/kouja/backups

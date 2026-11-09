@@ -1,7 +1,8 @@
 # OpenTelemetry metrics
 
-`kouja-agent` can export per-logical-volume metrics over OTLP/gRPC in addition
-to the existing Prometheus endpoint on `/metrics`.
+`kouja-agent` exposes per-logical-volume metrics on its existing mTLS
+`/metrics` endpoint. The service does not push metrics. An OpenTelemetry
+Collector using the Prometheus receiver, or a Prometheus server, pulls them.
 
 ## Configuration
 
@@ -9,25 +10,20 @@ to the existing Prometheus endpoint on `/metrics`.
 observability:
   otel:
     enabled: true
-    endpoint: otel-collector:4317
-    insecure: false
-    interval_seconds: 30
     service_name: kouja-agent
-    headers:
-      x-scope-orgid: kouja
 ```
 
-- `endpoint` is an OTLP/gRPC host and port. If empty, the exporter uses the
-  standard OpenTelemetry endpoint/environment defaults.
-- Set `insecure: true` for a plaintext collector, typically on localhost or a
-  trusted monitoring network.
-- `headers` is optional metadata sent with every export.
-- OpenTelemetry is disabled by default and never blocks agent startup. If the
-  exporter cannot be created, the agent logs the error and continues serving.
+OpenTelemetry metric instruments are disabled by default. When enabled, the
+agent registers them with the same Prometheus registry as the existing kouja
+metrics, so a single scrape returns both.
+
+The endpoint remains protected by the agent's normal mTLS listener. Configure
+the collector's Prometheus receiver with a client certificate trusted by the
+agent's client CA, or place an authenticated proxy in front of `/metrics`.
 
 ## Metrics per LV
 
-Each metric has these attributes:
+Each metric carries these labels:
 
 - `kouja.owner`
 - `kouja.volume_id`
@@ -35,23 +31,44 @@ Each metric has these attributes:
 - `kouja.vg_name`
 - `kouja.storage_class`
 - `kouja.state`
-- `kouja.export_protocol`, when the LV is exported
+- `kouja.export_protocol`, when exported
 
-Metrics:
+OpenTelemetry names (translated to Prometheus names by the exporter):
 
-| Metric | Type | Meaning |
+| OTel name | Prometheus name | Meaning |
 | --- | --- | --- |
-| `kouja.lv.requested_bytes` | int64 gauge | Requested LV size |
-| `kouja.lv.actual_bytes` | int64 gauge | Actual LV size |
-| `kouja.lv.observed_bytes` | int64 gauge | Size observed on the host |
-| `kouja.lv.present` | int64 gauge | `1` when the LV is present, otherwise `0` |
-| `kouja.lv.exported` | int64 gauge | `1` when an export exists, otherwise `0` |
-| `kouja.lv.active_sessions` | int64 gauge | Observed active export sessions |
-| `kouja.lv.info` | int64 gauge | Identity/state marker; always `1` |
+| `kouja.lv.requested_bytes` | `kouja_lv_requested_bytes` | Requested LV size |
+| `kouja.lv.actual_bytes` | `kouja_lv_actual_bytes` | Actual LV size |
+| `kouja.lv.observed_bytes` | `kouja_lv_observed_bytes` | Size observed on the host |
+| `kouja.lv.present` | `kouja_lv_present` | `1` when the LV is present |
+| `kouja.lv.exported` | `kouja_lv_exported` | `1` when an export exists |
+| `kouja.lv.active_sessions` | `kouja_lv_active_sessions` | Active export sessions |
+| `kouja.lv.info` | `kouja_lv_info` | Identity/state marker; always `1` |
 
 Resource attributes include `service.name`, `service.version`,
 `service.instance.id`, and `host.id` (the kouja host UUID).
 
-The callback reads all non-deleted volume statuses, so metrics are not limited
-to the admin UI's 256-row page. Cardinality scales with the number of LVs; keep
-that in mind when retaining metrics.
+The callback reads all non-deleted volume statuses, so scraping is not limited
+to the admin UI's 256-row page. Cardinality scales with the number of LVs.
+
+## Example collector scrape
+
+A typical Prometheus receiver configuration:
+
+```yaml
+receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: kouja
+          scheme: https
+          metrics_path: /metrics
+          static_configs:
+            - targets: ["storage-host:9443"]
+          tls_config:
+            ca_file: /etc/kouja/client-ca.crt
+            cert_file: /etc/kouja/collector.crt
+            key_file: /etc/kouja/collector.key
+```
+
+The existing legacy kouja metrics remain available on the same endpoint.

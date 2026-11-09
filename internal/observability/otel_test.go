@@ -3,6 +3,9 @@ package observability
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -196,5 +199,46 @@ func TestOTelResourceAndNoExportAttributes(t *testing.T) {
 	attributes := firstGaugeAttributes(t, collected, "kouja.lv.requested_bytes")
 	if got, ok := attributes.Value(attribute.Key("kouja.export_protocol")); ok {
 		t.Fatalf("unexpected export protocol %q", got.AsString())
+	}
+}
+
+func TestNewOTelPullHandlerIncludesLegacyMetrics(t *testing.T) {
+	legacy := New()
+	legacy.Inc("kouja_legacy_total")
+	legacy.Set("kouja_legacy_gauge", 2)
+	reporter, err := NewOTel(context.Background(), OTelOptions{
+		Enabled: true, ServiceName: "svc",
+		Metrics: legacy,
+		Volumes: func(context.Context) ([]state.VolumeStatus, error) {
+			return []state.VolumeStatus{{Volume: state.Volume{
+				Owner: "o", VolumeID: "v", LVName: "lv", VGName: "vg",
+				RequestedSizeBytes: 10, ActualSizeBytes: 9, State: "available",
+			}}}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = reporter.Shutdown(context.Background()) }()
+	recorder := httptest.NewRecorder()
+	reporter.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body := recorder.Body.String()
+	for _, name := range []string{"kouja_legacy_total", "kouja_legacy_gauge", "kouja_lv_requested_bytes"} {
+		if !strings.Contains(body, name) {
+			t.Fatalf("metrics body missing %s: %s", name, body)
+		}
+	}
+}
+
+func TestMetricsSnapshot(t *testing.T) {
+	metrics := New()
+	metrics.Inc("counter")
+	metrics.Set("gauge", 4)
+	counters, gauges := metrics.Snapshot()
+	if counters["counter"] != 1 || gauges["gauge"] != 4 {
+		t.Fatalf("snapshot = %#v %#v", counters, gauges)
+	}
+	if nilCounters, nilGauges := (*Metrics)(nil).Snapshot(); nilCounters == nil || nilGauges == nil {
+		t.Fatal("nil snapshot is not usable")
 	}
 }

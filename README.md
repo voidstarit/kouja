@@ -45,7 +45,7 @@ serialized per volume and per volume group.
 | Credentials | AES-256-GCM encrypted at rest; per-attachment rotation; node grants. |
 | Recovery | Startup and periodic reconciliation, drift reporting, and admin actions. |
 | Kubernetes | CSI controller and node plugin for provisioning, attach/detach, mount, expansion, and cleanup. |
-| Observability | `/healthz`, `/readyz`, Prometheus metrics, OTLP/OpenTelemetry per-LV metrics, structured logs, and audit rows. |
+| Observability | `/healthz`, `/readyz`, Prometheus metrics with OpenTelemetry per-LV metrics, structured logs, and audit rows. |
 | Local admin UI | Optional loopback-only configuration and status page; no authentication, disabled by default. |
 
 Not supported by v1: thin provisioning, snapshots, clones, replication,

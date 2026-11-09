@@ -145,12 +145,8 @@ type ObservabilityConfig struct {
 }
 
 type OTelConfig struct {
-	Enabled         bool              `yaml:"enabled"`
-	Endpoint        string            `yaml:"endpoint"`
-	Insecure        bool              `yaml:"insecure"`
-	Headers         map[string]string `yaml:"headers"`
-	IntervalSeconds int               `yaml:"interval_seconds"`
-	ServiceName     string            `yaml:"service_name"`
+	Enabled     bool   `yaml:"enabled"`
+	ServiceName string `yaml:"service_name"`
 }
 
 type StateConfig struct {
@@ -237,10 +233,7 @@ func Default() Config {
 			CapacityRequestsPerSec:  10,
 		},
 		Observability: ObservabilityConfig{
-			OTel: OTelConfig{
-				IntervalSeconds: 30,
-				ServiceName:     "kouja-agent",
-			},
+			OTel: OTelConfig{ServiceName: "kouja-agent"},
 		},
 		State: StateConfig{
 			BackupDir:                  "/var/lib/kouja/backups",
@@ -366,9 +359,6 @@ func (cfg *Config) applyDefaults() {
 			cfg.Operations.StepTimeoutSecs[action] = defaults.Operations.StepTimeoutSecs[action]
 		}
 	}
-	if cfg.Observability.OTel.IntervalSeconds <= 0 {
-		cfg.Observability.OTel.IntervalSeconds = defaults.Observability.OTel.IntervalSeconds
-	}
 	if strings.TrimSpace(cfg.Observability.OTel.ServiceName) == "" {
 		cfg.Observability.OTel.ServiceName = defaults.Observability.OTel.ServiceName
 	}
@@ -455,19 +445,8 @@ func (cfg *Config) ValidateCore() error {
 	if cfg.Admission.MaxConcurrentOperations <= 0 || cfg.Admission.PerCallerOperations <= 0 || cfg.Admission.CapacityRequestsPerSec <= 0 {
 		return fmt.Errorf("%w: admission values must be positive", ErrInvalid)
 	}
-	if cfg.Observability.OTel.Enabled {
-		if cfg.Observability.OTel.IntervalSeconds <= 0 {
-			return fmt.Errorf("%w: observability.otel.interval_seconds must be positive", ErrInvalid)
-		}
-		if strings.TrimSpace(cfg.Observability.OTel.ServiceName) == "" {
-			return fmt.Errorf("%w: observability.otel.service_name is required", ErrInvalid)
-		}
-		if cfg.Observability.OTel.Endpoint != "" {
-			host, port, err := net.SplitHostPort(cfg.Observability.OTel.Endpoint)
-			if err != nil || host == "" || port == "" {
-				return fmt.Errorf("%w: observability.otel.endpoint must be host:port", ErrInvalid)
-			}
-		}
+	if cfg.Observability.OTel.Enabled && strings.TrimSpace(cfg.Observability.OTel.ServiceName) == "" {
+		return fmt.Errorf("%w: observability.otel.service_name is required", ErrInvalid)
 	}
 	if cfg.State.IntegrityCheckIntervalSecs <= 0 || cfg.State.ReconcileIntervalSeconds <= 0 ||
 		cfg.State.AuditRetentionDays <= 0 {
