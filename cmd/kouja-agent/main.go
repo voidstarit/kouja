@@ -194,7 +194,7 @@ func run() error {
 		}
 	}()
 	backupDone := make(chan struct{})
-	go runBackups(ctx, store, cfg, logger, backupDone, pkiService)
+	go runBackups(ctx, store, cfg, *configPath, logger, backupDone, pkiService)
 	reconciler := agent.NewReconciler(store, lvmBackend, map[string]target.Exporter{
 		"iscsi": iscsi, "nvme-tcp": nvme,
 	}, time.Duration(cfg.State.ReconcileIntervalSeconds)*time.Second)
@@ -274,14 +274,40 @@ func acquireLock(path string) (*os.File, error) {
 	return file, nil
 }
 
-func runBackups(ctx context.Context, store *state.Store, cfg *config.Config, logger *slog.Logger, done chan<- struct{}, snapshotter backup.JournalSnapshotter) {
+func runBackups(ctx context.Context, store *state.Store, cfg *config.Config, configPath string, logger *slog.Logger, done chan<- struct{}, snapshotter backup.JournalSnapshotter) {
 	defer close(done)
-	if cfg.State.BackupTarget == "" {
+	targetDir := cfg.State.BackupTarget
+	if targetDir == "" {
+		targetDir = cfg.State.BackupDir
+	}
+	if targetDir == "" {
 		logger.Warn("backup target is not configured; backups are disabled")
 		return
 	}
+	archiveFiles := map[string]string{
+		"config.yaml":       configPath,
+		"emergency.log":     cfg.EmergencyLog,
+		"tls/server.crt":    cfg.Listen.TLS.CertFile,
+		"tls/server.key":    cfg.Listen.TLS.KeyFile,
+		"tls/client-ca.crt": cfg.Listen.TLS.ClientCAFile,
+		"ca/ca.key":         cfg.CertificateAuthority.KeyFile,
+	}
+	archiveDirs := map[string]string{}
+	if cfg.CertificateAuthority.CertificateDir != "" {
+		archiveDirs["certificates"] = cfg.CertificateAuthority.CertificateDir
+	}
+	var s3Options *backup.S3Options
+	if cfg.State.S3Backup.Enabled {
+		s3Options = &backup.S3Options{
+			Bucket: cfg.State.S3Backup.Bucket, Prefix: cfg.State.S3Backup.Prefix,
+			Region: cfg.State.S3Backup.Region, Endpoint: cfg.State.S3Backup.Endpoint,
+			ForcePathStyle:       cfg.State.S3Backup.ForcePathStyle,
+			ServerSideEncryption: cfg.State.S3Backup.ServerSideEncryption,
+			KMSKeyID:             cfg.State.S3Backup.KMSKeyID,
+		}
+	}
 	manager, err := backup.New(store, backup.Options{
-		TargetDir:          cfg.State.BackupTarget,
+		TargetDir:          targetDir,
 		HostIDFile:         cfg.HostIDFile,
 		SecretKeyFile:      cfg.SecretKeyFile,
 		RetentionShort:     cfg.State.BackupRetentionShort,
@@ -289,6 +315,9 @@ func runBackups(ctx context.Context, store *state.Store, cfg *config.Config, log
 		RetentionWeekly:    cfg.State.BackupRetentionWeekly,
 		JournalSnapshotter: snapshotter,
 		RevocationLogName:  "revoked-serials.log",
+		ArchiveFiles:       archiveFiles,
+		ArchiveDirs:        archiveDirs,
+		S3:                 s3Options,
 	})
 	if err != nil {
 		logger.Error("backup configuration failed", "error", err)

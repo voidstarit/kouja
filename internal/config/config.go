@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -139,15 +140,28 @@ type AdmissionConfig struct {
 }
 
 type StateConfig struct {
-	BackupDir                  string `yaml:"backup_dir"`
-	BackupTarget               string `yaml:"backup_target"`
-	BackupIntervalSeconds      int    `yaml:"backup_interval_seconds"`
-	BackupRetentionShort       int    `yaml:"backup_retention_short"`
-	BackupRetentionDaily       int    `yaml:"backup_retention_daily"`
-	BackupRetentionWeekly      int    `yaml:"backup_retention_weekly"`
-	IntegrityCheckIntervalSecs int    `yaml:"integrity_check_interval_seconds"`
-	ReconcileIntervalSeconds   int    `yaml:"reconcile_interval_seconds"`
-	AuditRetentionDays         int    `yaml:"audit_retention_days"`
+	BackupDir                  string         `yaml:"backup_dir"`
+	BackupTarget               string         `yaml:"backup_target"`
+	BackupIntervalSeconds      int            `yaml:"backup_interval_seconds"`
+	BackupRetentionShort       int            `yaml:"backup_retention_short"`
+	BackupRetentionDaily       int            `yaml:"backup_retention_daily"`
+	BackupRetentionWeekly      int            `yaml:"backup_retention_weekly"`
+	IntegrityCheckIntervalSecs int            `yaml:"integrity_check_interval_seconds"`
+	ReconcileIntervalSeconds   int            `yaml:"reconcile_interval_seconds"`
+	AuditRetentionDays         int            `yaml:"audit_retention_days"`
+	S3Backup                   S3BackupConfig `yaml:"s3_backup"`
+}
+
+// S3BackupConfig configures periodic upload of recovery bundles to S3.
+type S3BackupConfig struct {
+	Enabled              bool   `yaml:"enabled"`
+	Bucket               string `yaml:"bucket"`
+	Prefix               string `yaml:"prefix"`
+	Region               string `yaml:"region"`
+	Endpoint             string `yaml:"endpoint"`
+	ForcePathStyle       bool   `yaml:"force_path_style"`
+	ServerSideEncryption string `yaml:"server_side_encryption"`
+	KMSKeyID             string `yaml:"kms_key_id"`
 }
 
 func Default() Config {
@@ -214,6 +228,11 @@ func Default() Config {
 			IntegrityCheckIntervalSecs: 86400,
 			ReconcileIntervalSeconds:   60,
 			AuditRetentionDays:         90,
+			S3Backup: S3BackupConfig{
+				Enabled:              false,
+				Prefix:               "kouja/",
+				ServerSideEncryption: "AES256",
+			},
 		},
 		CertificateAuthority: CertificateAuthorityConfig{
 			Enabled:               false,
@@ -379,6 +398,25 @@ func (cfg *Config) Validate() error {
 		cfg.State.IntegrityCheckIntervalSecs <= 0 || cfg.State.ReconcileIntervalSeconds <= 0 ||
 		cfg.State.AuditRetentionDays <= 0 {
 		return fmt.Errorf("%w: state interval and retention values must be positive", ErrInvalid)
+	}
+	if cfg.State.S3Backup.Enabled {
+		if strings.TrimSpace(cfg.State.S3Backup.Bucket) == "" {
+			return fmt.Errorf("%w: state.s3_backup.bucket is required when enabled", ErrInvalid)
+		}
+		switch cfg.State.S3Backup.ServerSideEncryption {
+		case "", "AES256", "aws:kms":
+		default:
+			return fmt.Errorf("%w: state.s3_backup.server_side_encryption must be AES256 or aws:kms", ErrInvalid)
+		}
+		if cfg.State.S3Backup.ServerSideEncryption == "aws:kms" && strings.TrimSpace(cfg.State.S3Backup.KMSKeyID) == "" {
+			return fmt.Errorf("%w: state.s3_backup.kms_key_id is required for aws:kms", ErrInvalid)
+		}
+		if cfg.State.S3Backup.Endpoint != "" {
+			parsed, err := url.Parse(cfg.State.S3Backup.Endpoint)
+			if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+				return fmt.Errorf("%w: state.s3_backup.endpoint must be an http(s) URL", ErrInvalid)
+			}
+		}
 	}
 	if err := requireAbsolute("certificate_authority.key_file", cfg.CertificateAuthority.KeyFile); err != nil {
 		return err

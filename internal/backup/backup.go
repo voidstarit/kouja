@@ -36,6 +36,10 @@ type Options struct {
 	RetentionWeekly    int
 	JournalSnapshotter JournalSnapshotter
 	RevocationLogName  string
+	ArchiveFiles       map[string]string
+	ArchiveDirs        map[string]string
+	S3                 *S3Options
+	S3Uploader         ObjectUploader
 	Now                func() time.Time
 }
 
@@ -50,6 +54,8 @@ type Result struct {
 	HostIDPath   string
 	JournalPath  string
 	ManifestPath string
+	ArchivePath  string
+	S3Key        string
 	CreatedAt    time.Time
 }
 
@@ -62,6 +68,9 @@ type manifest struct {
 	HasKey        bool      `json:"has_key"`
 	HasHostID     bool      `json:"has_host_id"`
 	RevocationLog string    `json:"revocation_log,omitempty"`
+	Archive       string    `json:"archive,omitempty"`
+	S3Bucket      string    `json:"s3_bucket,omitempty"`
+	S3Key         string    `json:"s3_key,omitempty"`
 	SchemaVersion int       `json:"schema_version"`
 }
 
@@ -92,6 +101,24 @@ func New(store *state.Store, opts Options) (*Manager, error) {
 	}
 	if opts.RevocationLogName == "" {
 		opts.RevocationLogName = "revoked-serials.log"
+	}
+	if opts.S3 != nil {
+		if opts.S3.Bucket == "" {
+			return nil, fmt.Errorf("%w: S3 bucket is required", ErrInvalid)
+		}
+		if opts.S3.Prefix == "" {
+			opts.S3.Prefix = "kouja/"
+		}
+		if !strings.HasSuffix(opts.S3.Prefix, "/") {
+			opts.S3.Prefix += "/"
+		}
+		if opts.S3Uploader == nil {
+			uploader, err := NewS3Uploader(context.Background(), *opts.S3)
+			if err != nil {
+				return nil, err
+			}
+			opts.S3Uploader = uploader
+		}
 	}
 	return &Manager{store: store, opts: opts}, nil
 }
@@ -169,6 +196,17 @@ func (manager *Manager) Run(ctx context.Context) (Result, error) {
 		hasJournal = true
 		created = append(created, journalPath)
 	}
+	archivePath := ""
+	s3Key := ""
+	archiveName := ""
+	if manager.opts.S3 != nil {
+		archiveName = base + ".tar.gz"
+		archivePath = filepath.Join(manager.opts.TargetDir, archiveName)
+		s3Key = strings.TrimSuffix(manager.opts.S3.Prefix, "/") + "/" + archiveName
+		if _, err := os.Stat(archivePath); err == nil {
+			return Result{}, fmt.Errorf("%w: %s", ErrConflict, archivePath)
+		}
+	}
 	document := manifest{
 		CreatedAt:     now,
 		Database:      filepath.Base(databasePath),
@@ -177,7 +215,12 @@ func (manager *Manager) Run(ctx context.Context) (Result, error) {
 		HostUUID:      hostUUID,
 		HasKey:        hasKey,
 		HasHostID:     hasHostID,
+		Archive:       archiveName,
 		SchemaVersion: state.SchemaVersion(),
+	}
+	if manager.opts.S3 != nil {
+		document.S3Bucket = manager.opts.S3.Bucket
+		document.S3Key = s3Key
 	}
 	if !hasKey {
 		document.SecretKey = ""
@@ -189,8 +232,35 @@ func (manager *Manager) Run(ctx context.Context) (Result, error) {
 		return fail(err)
 	}
 	created = append(created, manifestPath)
+	if manager.opts.S3 != nil {
+		archiveFiles := map[string]string{
+			"state.db":     databasePath,
+			"restore.json": manifestPath,
+		}
+		if hasKey {
+			archiveFiles["secret.key"] = keyPath
+		}
+		if hasHostID {
+			archiveFiles["host-id"] = hostIDPath
+		}
+		if hasJournal {
+			archiveFiles["revoked-serials.log"] = journalPath
+		}
+		for name, source := range manager.opts.ArchiveFiles {
+			archiveFiles[name] = source
+		}
+		if err := createArchive(archivePath, archiveFiles, manager.opts.ArchiveDirs); err != nil {
+			return fail(err)
+		}
+		created = append(created, archivePath)
+	}
 	if err := syncDir(manager.opts.TargetDir); err != nil {
 		return fail(err)
+	}
+	if manager.opts.S3 != nil {
+		if err := manager.opts.S3Uploader.Upload(ctx, archivePath, s3Key); err != nil {
+			return Result{DatabasePath: databasePath, KeyPath: keyPath, HostIDPath: hostIDPath, JournalPath: journalPath, ManifestPath: manifestPath, ArchivePath: archivePath, S3Key: s3Key, CreatedAt: now}, err
+		}
 	}
 	if err := manager.Rotate(now); err != nil {
 		return Result{}, err
@@ -203,12 +273,18 @@ func (manager *Manager) Run(ctx context.Context) (Result, error) {
 	if hasJournal {
 		resultJournal = journalPath
 	}
+	resultArchive := ""
+	if manager.opts.S3 != nil {
+		resultArchive = archivePath
+	}
 	return Result{
 		DatabasePath: databasePath,
 		KeyPath:      resultKey,
 		HostIDPath:   hostIDPath,
 		JournalPath:  resultJournal,
 		ManifestPath: manifestPath,
+		ArchivePath:  resultArchive,
+		S3Key:        s3Key,
 		CreatedAt:    now,
 	}, nil
 }
@@ -261,7 +337,7 @@ func (manager *Manager) Rotate(now time.Time) error {
 		if keep[candidate.base] {
 			continue
 		}
-		for _, suffix := range []string{".db", ".secret.key", ".host-id", ".restore.json"} {
+		for _, suffix := range []string{".db", ".secret.key", ".host-id", ".restore.json", ".tar.gz"} {
 			_ = os.Remove(filepath.Join(manager.opts.TargetDir, candidate.base+suffix))
 		}
 		if manager.opts.JournalSnapshotter != nil && manager.opts.RevocationLogName != "" {
