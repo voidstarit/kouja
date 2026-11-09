@@ -21,7 +21,10 @@ var (
 
 type VGService interface {
 	Register(ctx context.Context, name, expectedUUID string, replace bool) (lvm.Capacity, error)
+	RegisterWithAudit(ctx context.Context, name, expectedUUID string, replace bool, event *state.AuditEvent) (lvm.Capacity, error)
 	Deregister(ctx context.Context, name string) error
+	DeregisterWithAudit(ctx context.Context, name string, event *state.AuditEvent) error
+	Get(ctx context.Context, name string) (state.VG, error)
 	List(ctx context.Context) ([]state.VG, error)
 	Inspect(ctx context.Context, name string) (lvm.Capacity, error)
 }
@@ -56,6 +59,14 @@ func (manager *VGManager) Inspect(ctx context.Context, name string) (lvm.Capacit
 }
 
 func (manager *VGManager) Register(ctx context.Context, name, expectedUUID string, replace bool) (lvm.Capacity, error) {
+	return manager.register(ctx, name, expectedUUID, replace, nil)
+}
+
+func (manager *VGManager) RegisterWithAudit(ctx context.Context, name, expectedUUID string, replace bool, event *state.AuditEvent) (lvm.Capacity, error) {
+	return manager.register(ctx, name, expectedUUID, replace, event)
+}
+
+func (manager *VGManager) register(ctx context.Context, name, expectedUUID string, replace bool, event *state.AuditEvent) (lvm.Capacity, error) {
 	capacity, err := manager.Inspect(ctx, name)
 	if err != nil {
 		return lvm.Capacity{}, err
@@ -68,24 +79,36 @@ func (manager *VGManager) Register(ctx context.Context, name, expectedUUID strin
 		existing, getErr := tx.GetVG(name)
 		switch {
 		case errors.Is(getErr, state.ErrNotFound):
-			return tx.PutVG(state.VG{
+			if err := tx.PutVG(state.VG{
 				Name: name, UUID: capacity.VGUUID, State: "active",
 				RegisteredAt: now, UpdatedAt: now,
-			})
+			}); err != nil {
+				return err
+			}
 		case getErr != nil:
 			return getErr
 		case existing.UUID == capacity.VGUUID:
 			existing.State = "active"
 			existing.UpdatedAt = now
-			return tx.PutVG(existing)
+			if err := tx.PutVG(existing); err != nil {
+				return err
+			}
 		case !replace:
 			return fmt.Errorf("%w: existing UUID %q, observed %q", ErrVGConflict, existing.UUID, capacity.VGUUID)
 		default:
 			existing.UUID = capacity.VGUUID
 			existing.State = "active"
 			existing.UpdatedAt = now
-			return tx.PutVG(existing)
+			if err := tx.PutVG(existing); err != nil {
+				return err
+			}
 		}
+		if event != nil {
+			if err := tx.PutAuditEvent(*event); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return lvm.Capacity{}, err
@@ -94,6 +117,14 @@ func (manager *VGManager) Register(ctx context.Context, name, expectedUUID strin
 }
 
 func (manager *VGManager) Deregister(ctx context.Context, name string) error {
+	return manager.deregister(ctx, name, nil)
+}
+
+func (manager *VGManager) DeregisterWithAudit(ctx context.Context, name string, event *state.AuditEvent) error {
+	return manager.deregister(ctx, name, event)
+}
+
+func (manager *VGManager) deregister(ctx context.Context, name string, event *state.AuditEvent) error {
 	if name == "" {
 		return fmt.Errorf("%w: VG name is required", ErrVGNotFound)
 	}
@@ -105,7 +136,13 @@ func (manager *VGManager) Deregister(ctx context.Context, name string) error {
 		}
 	}
 	err := manager.store.Transact(ctx, func(tx state.Tx) error {
-		return tx.DeleteVG(name)
+		if err := tx.DeleteVG(name); err != nil {
+			return err
+		}
+		if event != nil {
+			return tx.PutAuditEvent(*event)
+		}
+		return nil
 	})
 	if errors.Is(err, state.ErrConflict) {
 		return fmt.Errorf("%w: %v", ErrVGInUse, err)
@@ -124,4 +161,17 @@ func (manager *VGManager) List(ctx context.Context) ([]state.VG, error) {
 		return err
 	})
 	return vgs, err
+}
+
+func (manager *VGManager) Get(ctx context.Context, name string) (state.VG, error) {
+	if name == "" {
+		return state.VG{}, ErrVGNotFound
+	}
+	var vg state.VG
+	err := manager.store.Transact(ctx, func(tx state.Tx) error {
+		value, err := tx.GetVG(name)
+		vg = value
+		return err
+	})
+	return vg, err
 }

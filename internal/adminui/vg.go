@@ -9,6 +9,7 @@ import (
 
 	"github.com/voidstarit/kouja/internal/agent"
 	"github.com/voidstarit/kouja/internal/lvm"
+	"github.com/voidstarit/kouja/internal/state"
 )
 
 func (server *Server) handleRegisterVG(response http.ResponseWriter, request *http.Request) {
@@ -26,6 +27,18 @@ func (server *Server) handleRegisterVG(response http.ResponseWriter, request *ht
 	}
 	if payload.Name == "" {
 		writeMappedError(response, fmt.Errorf("%w: name is required", errBadRequest))
+		return
+	}
+	if server.options.VGClass != nil {
+		registration, verdicts, err := server.options.VGClass.RegisterVG(request.Context(), payload.Name, "", false, state.AuditEvent{
+			CallerOwner: "local-admin", Result: "succeeded", RemoteAddr: request.RemoteAddr,
+		})
+		if err != nil {
+			writeMappedError(response, err)
+			return
+		}
+		view := server.buildVGStatusFromCapacity(payload.Name, registration.Capacity, server.configuredVG(payload.Name), "")
+		writeJSON(response, http.StatusCreated, RegisterVGResponse{VG: view, Warnings: warningsView(verdicts)})
 		return
 	}
 	server.vgClassGate.Lock()
@@ -47,6 +60,16 @@ func (server *Server) handleDeregisterVG(response http.ResponseWriter, request *
 	name, err := pathName(request.URL.Path, "/api/vgs/")
 	if err != nil {
 		writeMappedError(response, err)
+		return
+	}
+	if server.options.VGClass != nil {
+		if _, err := server.options.VGClass.DeregisterVG(request.Context(), name, state.AuditEvent{
+			CallerOwner: "local-admin", Result: "succeeded", RemoteAddr: request.RemoteAddr,
+		}); err != nil {
+			writeMappedError(response, err)
+			return
+		}
+		response.WriteHeader(http.StatusNoContent)
 		return
 	}
 	server.vgClassGate.Lock()
@@ -81,6 +104,25 @@ func (server *Server) handleSetClass(response http.ResponseWriter, request *http
 	}
 	if payload.VG == "" {
 		writeMappedError(response, fmt.Errorf("%w: vg is required", errBadRequest))
+		return
+	}
+	if server.options.VGClass != nil {
+		verdicts, err := server.options.VGClass.SetClass(request.Context(), class, payload.VG, state.AuditEvent{
+			CallerOwner: "local-admin", Result: "succeeded", RemoteAddr: request.RemoteAddr,
+		})
+		if err != nil {
+			writeMappedError(response, err)
+			return
+		}
+		configState, err := server.configState()
+		if err != nil {
+			writeMappedError(response, fmt.Errorf("%w: %v", errInternal, err))
+			return
+		}
+		writeJSON(response, http.StatusOK, SetClassResponse{
+			Classes: server.options.Classes.Snapshot(), ConfigChanged: configState.ConfigChanged,
+			RestartRequired: configState.RestartRequired, Warnings: warningsView(verdicts),
+		})
 		return
 	}
 	server.vgClassGate.Lock()
@@ -125,6 +167,16 @@ func (server *Server) handleRemoveClass(response http.ResponseWriter, request *h
 	class, err := pathName(request.URL.Path, "/api/classes/")
 	if err != nil {
 		writeMappedError(response, err)
+		return
+	}
+	if server.options.VGClass != nil {
+		if _, err := server.options.VGClass.RemoveClass(request.Context(), class, state.AuditEvent{
+			CallerOwner: "local-admin", Result: "succeeded", RemoteAddr: request.RemoteAddr,
+		}); err != nil {
+			writeMappedError(response, err)
+			return
+		}
+		response.WriteHeader(http.StatusNoContent)
 		return
 	}
 	server.vgClassGate.Lock()

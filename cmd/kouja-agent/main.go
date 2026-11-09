@@ -108,6 +108,7 @@ func run() error {
 	metrics := observability.New()
 	auditRecorder := audit.NewRecorder(store, logger, metrics)
 	validators := naming.NewValidators()
+	vgClassManager := agent.NewVGClassManager(vgManager, classMap, vgClassGate, auditRecorder)
 
 	stepTimeouts := make(map[operations.Action]time.Duration)
 	for action, seconds := range cfg.Operations.StepTimeoutSecs {
@@ -156,6 +157,7 @@ func run() error {
 		agent.WithClassRegistry(classMap),
 		agent.WithVGService(vgManager),
 		agent.WithVGClassGate(vgClassGate),
+		agent.WithVGClassManager(vgClassManager),
 	}
 	adminOptions = append(adminOptions, agent.WithCertificateService(pkiService, pkiService, pkiService, pkiService))
 	adminService := agent.NewAdminService(store, lvmBackend, adminOptions...)
@@ -168,7 +170,8 @@ func run() error {
 	adminServer := startAdminServer(cfg, adminui.Options{
 		ConfigPath: *configPath, Config: cfg, ConfigData: configData,
 		Store: store, Capacity: lvmBackend, VGs: vgManager, Classes: classMap,
-		Issuer: pkiService, Registry: pkiService, ExternalRevoker: pkiService,
+		VGClass: vgClassManager,
+		Issuer:  pkiService, Registry: pkiService, ExternalRevoker: pkiService,
 		Files: pkiService, CAStatus: pkiService,
 		Ready: ready.Load, HostUUID: hostUUID, AgentVersion: agentVersion,
 		APIVersion: apiVersion, StartedAt: time.Now(), Logger: logger, Metrics: metrics,

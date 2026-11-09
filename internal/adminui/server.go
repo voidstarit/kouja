@@ -64,6 +64,7 @@ type Options struct {
 	Capacity        CapacityProvider
 	VGs             agent.VGService
 	Classes         agent.ClassRegistry
+	VGClass         *agent.VGClassManager
 	Ready           func() bool
 	HostUUID        string
 	AgentVersion    string

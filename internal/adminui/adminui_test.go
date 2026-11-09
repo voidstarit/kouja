@@ -75,6 +75,20 @@ func (service *testVGService) Register(_ context.Context, name, _ string, _ bool
 	service.vgs = append(service.vgs, state.VG{Name: name, UUID: service.capacity.VGUUID, State: "active", RegisteredAt: time.Now(), UpdatedAt: time.Now()})
 	return service.capacity, nil
 }
+func (service *testVGService) RegisterWithAudit(ctx context.Context, name, expected string, replace bool, _ *state.AuditEvent) (lvm.Capacity, error) {
+	return service.Register(ctx, name, expected, replace)
+}
+func (service *testVGService) DeregisterWithAudit(ctx context.Context, name string, _ *state.AuditEvent) error {
+	return service.Deregister(ctx, name)
+}
+func (service *testVGService) Get(_ context.Context, name string) (state.VG, error) {
+	for _, vg := range service.vgs {
+		if vg.Name == name {
+			return vg, nil
+		}
+	}
+	return state.VG{}, agent.ErrVGNotFound
+}
 func (service *testVGService) Deregister(_ context.Context, name string) error {
 	for index, vg := range service.vgs {
 		if vg.Name == name {

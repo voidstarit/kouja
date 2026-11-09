@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 
@@ -120,6 +121,20 @@ func (service *AdminService) GetVG(ctx context.Context, request *koujav1.GetVGRe
 	if request.GetVgName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "vg_name is required")
 	}
+	if service.vgClass != nil {
+		registration, err := service.vgClass.GetVG(ctx, request.GetVgName())
+		if err != nil {
+			if errors.Is(err, ErrVGNotFound) {
+				return nil, status.Error(codes.NotFound, "volume group not found")
+			}
+			return nil, vgStatusError(err)
+		}
+		return &koujav1.GetVGResponse{
+			Capacity:         service.capacityProto(registration.Capacity),
+			RegisteredVgUuid: registration.RegisteredVGUUID,
+			UuidDrift:        registration.UUIDDrift,
+		}, nil
+	}
 	var stored state.VG
 	if err := service.store.Transact(ctx, func(tx state.Tx) error {
 		value, err := tx.GetVG(request.GetVgName())
@@ -150,7 +165,16 @@ func (service *AdminService) ListClasses(ctx context.Context, _ *koujav1.ListCla
 	if _, err := requireIdentity(ctx, auth.RoleAdmin); err != nil {
 		return nil, statusError(err)
 	}
-	classes := service.classSnapshot()
+	var classes map[string]string
+	if service.vgClass != nil {
+		values, err := service.vgClass.ListClasses(ctx)
+		if err != nil {
+			return nil, statusError(err)
+		}
+		classes = values
+	} else {
+		classes = service.classSnapshot()
+	}
 	names := make([]string, 0, len(classes))
 	for name := range classes {
 		names = append(names, name)
@@ -170,6 +194,13 @@ func (service *AdminService) GetClass(ctx context.Context, request *koujav1.GetC
 	if request.GetClassName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "class_name is required")
 	}
+	if service.vgClass != nil {
+		vg, err := service.vgClass.GetClass(ctx, request.GetClassName())
+		if err != nil {
+			return nil, status.Error(codes.NotFound, "CLASS_NOT_FOUND")
+		}
+		return &koujav1.GetClassResponse{Class: &koujav1.ClassMapping{ClassName: request.GetClassName(), VgName: vg}}, nil
+	}
 	classes := service.classSnapshot()
 	vg, ok := classes[request.GetClassName()]
 	if !ok {
@@ -187,6 +218,13 @@ func (service *AdminService) SetClass(ctx context.Context, request *koujav1.SetC
 	}
 	if request.GetClassName() == "" || request.GetVgName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "class_name and vg_name are required")
+	}
+	if service.vgClass != nil {
+		verdicts, err := service.vgClass.SetClass(ctx, request.GetClassName(), request.GetVgName(), service.auditEvent(ctx))
+		if err != nil {
+			return nil, statusError(err)
+		}
+		return &koujav1.SetClassResponse{Class: &koujav1.ClassMapping{ClassName: request.GetClassName(), VgName: request.GetVgName()}, Warnings: warningProtos(verdicts), RequestId: requestID(ctx, request.GetRequestId())}, nil
 	}
 	service.vgClassGate.Lock()
 	defer service.vgClassGate.Unlock()
@@ -214,6 +252,13 @@ func (service *AdminService) RemoveClass(ctx context.Context, request *koujav1.R
 	}
 	if request.GetClassName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "class_name is required")
+	}
+	if service.vgClass != nil {
+		verdicts, err := service.vgClass.RemoveClass(ctx, request.GetClassName(), service.auditEvent(ctx))
+		if err != nil {
+			return nil, statusError(err)
+		}
+		return &koujav1.RemoveClassResponse{Warnings: warningProtos(verdicts), RequestId: requestID(ctx, request.GetRequestId())}, nil
 	}
 	service.vgClassGate.Lock()
 	defer service.vgClassGate.Unlock()
