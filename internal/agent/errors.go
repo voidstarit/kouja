@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/voidstarit/kouja/internal/audit"
 	"github.com/voidstarit/kouja/internal/lvm"
 	"github.com/voidstarit/kouja/internal/operations"
 	"github.com/voidstarit/kouja/internal/pki"
@@ -88,6 +89,8 @@ func statusError(err error) error {
 			code, reason = codes.FailedPrecondition, "JOURNAL_UNAVAILABLE"
 		case errors.Is(err, pki.ErrFile), errors.Is(err, pki.ErrUnsafeDirectory):
 			code, reason = codes.Internal, "CERTIFICATE_FILE_ERROR"
+		case errors.Is(err, audit.ErrWrite):
+			code, reason = codes.Internal, "AUDIT_WRITE_FAILED"
 		case errors.Is(err, target.ErrSessionActive):
 			code, reason = codes.FailedPrecondition, "SESSION_ACTIVE"
 		case errors.Is(err, target.ErrSessionUnknown):
