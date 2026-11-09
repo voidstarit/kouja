@@ -9,7 +9,7 @@ VERSION ?= $(shell git describe --tags --always --dirty)
 PROVIDER_PACKAGES ?= ./cmd/terraform-provider-kouja/... ./internal/terraformprovider/...
 # The Terraform provider is a separate deliverable with its own test target.
 COVERAGE_PACKAGES ?= $(shell $(GO) list ./internal/... | grep -v '/internal/terraformprovider$$')
-COVERAGE_FLOOR ?= 75
+COVERAGE_FLOOR ?= 80
 # Runtime files such as bin/clients may live under the repository root. Go's
 # ./... wildcard walks those directories too, so local build and test commands
 # use explicit source package roots instead.
