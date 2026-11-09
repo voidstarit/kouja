@@ -21,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/voidstarit/kouja/gen/client"
 	"github.com/voidstarit/kouja/gen/kouja/v1"
+	"google.golang.org/grpc/codes"
 )
 
 type koujaProvider struct {
@@ -252,5 +253,5 @@ func diagnosticFromError(err error) diag.Diagnostic {
 
 func isNotFound(err error) bool {
 	var clientErr *client.Error
-	return errors.As(err, &clientErr) && clientErr.Code == 5
+	return errors.As(err, &clientErr) && clientErr.Code == codes.NotFound
 }
