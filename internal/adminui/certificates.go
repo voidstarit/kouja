@@ -52,7 +52,8 @@ func (server *Server) handleListCertificates(response http.ResponseWriter, reque
 		for _, summary := range page.Certificates {
 			file := bySerial[summary.SerialNumber]
 			row := CertificateFile{
-				SerialNumber: summary.SerialNumber, Role: summary.Role, Kind: "certificate",
+				CertificateName: summary.Name,
+				SerialNumber:    summary.SerialNumber, Role: summary.Role, Kind: "certificate",
 				NotAfter: formatTime(summary.NotAfter), Revoked: summary.Revoked,
 				DownloadURL: "/api/certificates/" + url.PathEscape(file.Name),
 			}
@@ -97,9 +98,10 @@ func (server *Server) handleRevokeCertificate(response http.ResponseWriter, requ
 	}
 	writeJSON(response, http.StatusOK, RevokeCertificateResponse{
 		Certificate: CertificateFile{
-			Name: filepath.Base(record.CertFile), SerialNumber: record.SerialNumber,
-			Role: record.Role, Kind: "certificate", NotAfter: formatTime(record.NotAfter),
-			Revoked: record.Revoked, DownloadURL: "/api/certificates/" + url.PathEscape(filepath.Base(record.CertFile)),
+			Name: filepath.Base(record.CertFile), CertificateName: record.Name,
+			SerialNumber: record.SerialNumber, Role: record.Role, Kind: "certificate",
+			NotAfter: formatTime(record.NotAfter),
+			Revoked:  record.Revoked, DownloadURL: "/api/certificates/" + url.PathEscape(filepath.Base(record.CertFile)),
 		},
 		Warnings: warningsView(verdicts),
 	})
@@ -131,7 +133,7 @@ func (server *Server) handleRevokeExternalCertificate(response http.ResponseWrit
 		return
 	}
 	writeJSON(response, http.StatusOK, RevokeExternalCertificateResponse{
-		Certificate: CertificateFile{SerialNumber: record.SerialNumber, Role: record.Role, Kind: "certificate", NotAfter: formatTime(record.NotAfter), Revoked: record.Revoked},
+		Certificate: CertificateFile{CertificateName: record.Name, SerialNumber: record.SerialNumber, Role: record.Role, Kind: "certificate", NotAfter: formatTime(record.NotAfter), Revoked: record.Revoked},
 		Warnings:    warningsView(verdicts),
 	})
 }

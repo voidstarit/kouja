@@ -153,6 +153,7 @@ export function CertificatesPanel() {
         <table>
           <thead>
             <tr>
+              <th>Name</th>
               <th>Serial</th>
               <th>Role</th>
               <th>Status</th>
@@ -164,11 +165,12 @@ export function CertificatesPanel() {
           <tbody>
             {certificates.length === 0 && (
               <tr>
-                <td colSpan={6} class="empty">No issued certificates found.</td>
+                <td colSpan={7} class="empty">No issued certificates found.</td>
               </tr>
             )}
             {certificates.map((certificate) => (
               <tr key={certificate.serial_number || certificate.name}>
+                <td>{certificate.certificate_name || "—"}</td>
                 <td class="mono">{certificate.serial_number || certificate.name}</td>
                 <td>{certificate.role || "unknown"}</td>
                 <td>{certificate.revoked ? "revoked" : "active"}</td>

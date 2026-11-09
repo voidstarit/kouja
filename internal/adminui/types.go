@@ -287,17 +287,18 @@ type SetClassResponse struct {
 }
 
 type CertificateFile struct {
-	Name           string `json:"name"`
-	SerialNumber   string `json:"serial_number,omitempty"`
-	Kind           string `json:"kind"`
-	Role           string `json:"role"`
-	SizeBytes      int64  `json:"size_bytes"`
-	ModifiedAt     string `json:"modified_at,omitempty"`
-	NotAfter       string `json:"not_after,omitempty"`
-	RevokedAt      string `json:"revoked_at,omitempty"`
-	DownloadURL    string `json:"download_url,omitempty"`
-	KeyDownloadURL string `json:"key_download_url,omitempty"`
-	Revoked        bool   `json:"revoked"`
+	Name            string `json:"name"`
+	CertificateName string `json:"certificate_name,omitempty"`
+	SerialNumber    string `json:"serial_number,omitempty"`
+	Kind            string `json:"kind"`
+	Role            string `json:"role"`
+	SizeBytes       int64  `json:"size_bytes"`
+	ModifiedAt      string `json:"modified_at,omitempty"`
+	NotAfter        string `json:"not_after,omitempty"`
+	RevokedAt       string `json:"revoked_at,omitempty"`
+	DownloadURL     string `json:"download_url,omitempty"`
+	KeyDownloadURL  string `json:"key_download_url,omitempty"`
+	Revoked         bool   `json:"revoked"`
 }
 
 type CertificatesResponse struct {

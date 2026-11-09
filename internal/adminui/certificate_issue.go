@@ -54,7 +54,7 @@ func issuedFile(role, name, serial, kind string, notAfter time.Time) Certificate
 	}
 	fileName := role + "-" + name + "-" + serial + suffix
 	return CertificateFile{
-		Name: fileName, SerialNumber: serial, Kind: kind, Role: role,
+		Name: fileName, CertificateName: name, SerialNumber: serial, Kind: kind, Role: role,
 		NotAfter: formatTime(notAfter), DownloadURL: "/api/certificates/" + url.PathEscape(fileName),
 	}
 }

@@ -297,6 +297,7 @@ export interface SetClassResponse {
 
 export interface CertificateFile {
   name: string;
+  certificate_name?: string;
   serial_number?: string;
   kind: "certificate" | "private_key";
   role: string;
