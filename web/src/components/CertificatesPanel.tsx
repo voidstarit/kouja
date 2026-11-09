@@ -1,6 +1,12 @@
 import { useEffect, useState } from "preact/hooks";
-import { certificateDownloadURL, createCertificate, getCertificates } from "../api";
-import { formatBytes, formatTime } from "../format";
+import {
+  certificateDownloadURL,
+  createCertificate,
+  getCertificates,
+  revokeCertificate,
+  revokeExternalCertificate,
+} from "../api";
+import { formatTime } from "../format";
 import type { CertificatesResponse } from "../types";
 
 export function CertificatesPanel() {
@@ -12,6 +18,8 @@ export function CertificatesPanel() {
   const [notice, setNotice] = useState("");
   const [role, setRole] = useState<"admin" | "caller">("caller");
   const [name, setName] = useState("");
+  const [externalPEM, setExternalPEM] = useState("");
+  const [externalReason, setExternalReason] = useState("external");
 
   async function refresh() {
     setLoading(true);
@@ -41,7 +49,7 @@ export function CertificatesPanel() {
     try {
       const created = await createCertificate(role, trimmed);
       setName("");
-      setNotice(`Created ${created.certificate.name}. Download the certificate and private key below.`);
+      setNotice(`Created ${created.certificate.name || created.serial_number}. Download the certificate and private key below.`);
       await refresh();
     } catch (caught) {
       setCreateError(caught instanceof Error ? caught.message : String(caught));
@@ -50,8 +58,38 @@ export function CertificatesPanel() {
     }
   }
 
-  const files = data?.files ?? [];
-  const hasPrivateKey = files.some((file) => file.kind === "private_key");
+  async function revoke(serial: string) {
+    if (!serial || !window.confirm(`Revoke certificate ${serial}? This cannot be undone.`)) {
+      return;
+    }
+    setError("");
+    try {
+      await revokeCertificate(serial);
+      setNotice(`Revoked ${serial}.`);
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
+
+  async function revokeExternal(event: Event) {
+    event.preventDefault();
+    if (!externalPEM.trim()) {
+      return;
+    }
+    setError("");
+    try {
+      await revokeExternalCertificate(externalPEM, externalReason);
+      setExternalPEM("");
+      setNotice("External certificate revoked.");
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
+
+  const certificates = data?.certificates ?? data?.files ?? [];
+  const canIssue = data?.issuance_enabled !== false;
 
   return (
     <section class="card">
@@ -62,14 +100,16 @@ export function CertificatesPanel() {
         </button>
       </div>
       <p class="muted">
-        Files are read from <code>{data?.directory || "the configured client certificate directory"}</code>.
-        Only regular <code>.crt</code>, <code>.key</code>, and <code>.pem</code> files in that
-        directory are served. The CA private key and server private key are never exposed here.
+        Registry rows are shown below. Certificate and private-key downloads are served only for
+        managed files; the CA private key and server private key are never exposed here.
       </p>
+      {!canIssue && (
+        <p class="notice">Certificate issuance is disabled. Existing certificates can still be listed and revoked.</p>
+      )}
       <form class="form-grid" onSubmit={issue}>
         <label class="field">
           <span>Certificate type</span>
-          <select value={role} disabled={creating} onChange={(event) => setRole((event.target as HTMLSelectElement).value as "admin" | "caller")}>
+          <select value={role} disabled={creating || !canIssue} onChange={(event) => setRole((event.target as HTMLSelectElement).value as "admin" | "caller")}>
             <option value="caller">Client (caller)</option>
             <option value="admin">Admin</option>
           </select>
@@ -81,17 +121,17 @@ export function CertificatesPanel() {
             placeholder="e.g. rookery-prod"
             maxLength={64}
             pattern="[A-Za-z0-9][A-Za-z0-9._-]*"
-            disabled={creating}
+            disabled={creating || !canIssue}
             onInput={(event) => setName((event.target as HTMLInputElement).value)}
           />
         </label>
         <div class="field field-wide">
-          <button type="submit" disabled={creating || !name.trim()}>
+          <button type="submit" disabled={creating || !canIssue || !name.trim()}>
             {creating ? "Creating…" : "Create certificate"}
           </button>
           <span class="field-hint">
-            A new CA-signed client keypair is written to the certificate directory. Download both
-            files and keep the private key protected.
+            The agent writes the keypair and records it in the registry. Download both files and
+            keep the private key protected.
           </span>
         </div>
       </form>
@@ -107,51 +147,73 @@ export function CertificatesPanel() {
       ) : (
         <p class="muted">The client CA certificate is not configured or not readable.</p>
       )}
-      {hasPrivateKey && (
-        <p class="notice">
-          This list includes private keys. Downloading them gives the holder the same client
-          identity as the certificate. Keep the files protected.
-        </p>
-      )}
       {error && <p class="error">{error}</p>}
       {data?.error && <p class="error">{data.error}</p>}
       <div class="table-scroll">
         <table>
           <thead>
             <tr>
-              <th>File</th>
-              <th>Kind</th>
+              <th>Serial</th>
               <th>Role</th>
-              <th>Size</th>
-              <th>Modified</th>
+              <th>Status</th>
+              <th>Expires</th>
+              <th>Downloads</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {files.length === 0 && (
+            {certificates.length === 0 && (
               <tr>
-                <td colSpan={6} class="empty">
-                  No client certificate files found.
-                </td>
+                <td colSpan={6} class="empty">No issued certificates found.</td>
               </tr>
             )}
-            {files.map((file) => (
-              <tr key={file.name}>
-                <td class="mono">{file.name}</td>
-                <td>{file.kind === "private_key" ? "private key" : "certificate"}</td>
-                <td>{file.role || "unknown"}</td>
-                <td>{formatBytes(file.size_bytes)}</td>
-                <td>{formatTime(file.modified_at)}</td>
+            {certificates.map((certificate) => (
+              <tr key={certificate.serial_number || certificate.name}>
+                <td class="mono">{certificate.serial_number || certificate.name}</td>
+                <td>{certificate.role || "unknown"}</td>
+                <td>{certificate.revoked ? "revoked" : "active"}</td>
+                <td>{certificate.not_after ? formatTime(certificate.not_after) : "unknown"}</td>
                 <td>
-                  <a class="button-link" href={certificateDownloadURL(file.name)} download={file.name}>
-                    Download
-                  </a>
+                  {certificate.name || certificate.download_url ? (
+                    <a class="button-link" href={certificate.download_url || certificateDownloadURL(certificate.name)} download={certificate.name}>
+                      Certificate
+                    </a>
+                  ) : null}
+                  {certificate.key_download_url ? (
+                    <a class="button-link" href={certificate.key_download_url}>Private key</a>
+                  ) : null}
+                </td>
+                <td>
+                  <button
+                    disabled={certificate.revoked || !certificate.serial_number}
+                    onClick={() => void revoke(certificate.serial_number || "")}
+                  >
+                    Revoke
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      <form class="form-grid" onSubmit={revokeExternal}>
+        <label class="field field-wide">
+          <span>Revoke external certificate</span>
+          <textarea
+            value={externalPEM}
+            placeholder="Paste the PEM certificate"
+            disabled={!canIssue}
+            onInput={(event) => setExternalPEM((event.target as HTMLTextAreaElement).value)}
+          />
+        </label>
+        <label class="field">
+          <span>Reason</span>
+          <input value={externalReason} disabled={!canIssue} onInput={(event) => setExternalReason((event.target as HTMLInputElement).value)} />
+        </label>
+        <div class="field field-wide">
+          <button type="submit" disabled={!canIssue || !externalPEM.trim()}>Revoke external</button>
+        </div>
+      </form>
     </section>
   );
 }
