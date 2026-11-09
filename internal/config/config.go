@@ -162,6 +162,7 @@ type S3BackupConfig struct {
 	ForcePathStyle       bool   `yaml:"force_path_style"`
 	ServerSideEncryption string `yaml:"server_side_encryption"`
 	KMSKeyID             string `yaml:"kms_key_id"`
+	PerBackupFolder      bool   `yaml:"per_backup_folder"`
 }
 
 func Default() Config {
@@ -232,6 +233,7 @@ func Default() Config {
 				Enabled:              false,
 				Prefix:               "kouja/",
 				ServerSideEncryption: "AES256",
+				PerBackupFolder:      true,
 			},
 		},
 		CertificateAuthority: CertificateAuthorityConfig{

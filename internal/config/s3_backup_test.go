@@ -12,7 +12,7 @@ func TestS3BackupDefaultsAndValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cfg.State.S3Backup.Enabled || cfg.State.S3Backup.Prefix != "kouja/" ||
-		cfg.State.S3Backup.ServerSideEncryption != "AES256" {
+		cfg.State.S3Backup.ServerSideEncryption != "AES256" || !cfg.State.S3Backup.PerBackupFolder {
 		t.Fatalf("defaults = %#v", cfg.State.S3Backup)
 	}
 	cfg, err = Parse([]byte(validConfig + `
@@ -24,12 +24,13 @@ state:
     region: eu-central-1
     server_side_encryption: aws:kms
     kms_key_id: alias/kouja
+    per_backup_folder: false
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !cfg.State.S3Backup.Enabled || cfg.State.S3Backup.Bucket != "kouja-backups" ||
-		cfg.State.S3Backup.KMSKeyID != "alias/kouja" {
+		cfg.State.S3Backup.KMSKeyID != "alias/kouja" || cfg.State.S3Backup.PerBackupFolder {
 		t.Fatalf("s3 config = %#v", cfg.State.S3Backup)
 	}
 	for _, test := range []struct{ name, extra, want string }{

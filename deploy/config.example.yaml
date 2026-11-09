@@ -94,3 +94,4 @@ state:
     force_path_style: false
     server_side_encryption: AES256
     kms_key_id: ''
+    per_backup_folder: true

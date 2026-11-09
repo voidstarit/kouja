@@ -202,7 +202,11 @@ func (manager *Manager) Run(ctx context.Context) (Result, error) {
 	if manager.opts.S3 != nil {
 		archiveName = base + ".tar.gz"
 		archivePath = filepath.Join(manager.opts.TargetDir, archiveName)
-		s3Key = strings.TrimSuffix(manager.opts.S3.Prefix, "/") + "/" + archiveName
+		prefix := strings.TrimSuffix(manager.opts.S3.Prefix, "/") + "/"
+		if manager.opts.S3.PerBackupFolder {
+			prefix += now.Format("2006Jan021504") + "/"
+		}
+		s3Key = prefix + archiveName
 		if _, err := os.Stat(archivePath); err == nil {
 			return Result{}, fmt.Errorf("%w: %s", ErrConflict, archivePath)
 		}

@@ -36,6 +36,7 @@ state:
     force_path_style: false   # true for MinIO/path-style endpoints
     server_side_encryption: AES256
     kms_key_id: ""            # required for aws:kms
+    per_backup_folder: true   # 2026Nov091648/kouja-...tar.gz
 ```
 
 Credentials use the standard AWS default chain: environment variables, shared
@@ -44,16 +45,17 @@ needs `s3:PutObject` for the configured bucket/prefix. Bucket lifecycle rules
 are the recommended retention mechanism for S3; the agent does not delete old
 S3 objects itself.
 
-The S3 object key is:
+With `per_backup_folder: true`, each backup gets its own
+`YYYYMMMDDHHmm` folder:
 
 ```text
-<prefix>/<archive-name>
+kouja/2026Nov091648/kouja-20261109T164800.000000000Z.tar.gz
 ```
 
-For example:
+With `per_backup_folder: false`, objects are written directly under the prefix:
 
 ```text
-kouja/kouja-20261109T160000.000000000Z.tar.gz
+kouja/kouja-20261109T164800.000000000Z.tar.gz
 ```
 
 The local staging directory is `state.backup_target` when set, otherwise

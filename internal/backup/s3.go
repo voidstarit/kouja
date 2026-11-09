@@ -25,6 +25,7 @@ type S3Options struct {
 	ForcePathStyle       bool
 	ServerSideEncryption string
 	KMSKeyID             string
+	PerBackupFolder      bool
 }
 
 type S3Uploader struct {
