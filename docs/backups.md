@@ -1,13 +1,13 @@
 # Backup and recovery
 
-kouja creates a consistent recovery set on the configured backup interval. The
-set is written to local storage and, when enabled, uploaded to S3 as individual
-files. It is not wrapped in an opaque archive, so operators can inspect and
-restore selected content directly.
+kouja writes a consistent SQLite snapshot to local storage on the configured
+backup interval. When S3 is enabled, it uploads the full recovery set as
+individual files. The S3 set is not wrapped in an opaque archive, so operators
+can inspect and restore selected content directly.
 
 ## Backup contents
 
-Each backup contains the files needed to restore the agent:
+Each S3 backup contains the files needed to restore the agent:
 
 - `state.db` — consistent SQLite snapshot
 - `secret.key` — credential encryption key
