@@ -166,7 +166,7 @@ func (server *Server) handleDownloadCA(response http.ResponseWriter, request *ht
 	response.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 	response.Header().Set("Cache-Control", "no-store")
 	response.WriteHeader(http.StatusOK)
-	_, _ = response.Write(data)
+	_, _ = response.Write(data) //nolint:gosec // serves a resolved certificate file
 }
 
 func serveroptionsCA(server *Server) string {
@@ -196,7 +196,7 @@ func (server *Server) handleDownloadCertificate(response http.ResponseWriter, re
 	response.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(path)}))
 	response.Header().Set("Cache-Control", "no-store")
 	response.WriteHeader(http.StatusOK)
-	_, _ = response.Write(data)
+	_, _ = response.Write(data) //nolint:gosec // serves a resolved certificate file
 }
 
 func (server *Server) tlsInfo() TLSInfo {

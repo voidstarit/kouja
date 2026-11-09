@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ func TestRecorderWritesAndClassifiesFailures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	recorder := NewRecorder(store, slog.New(slog.NewTextHandler(io.Discard, nil)), observability.New())
 	if err := recorder.Record(t.Context(), Event{
 		Caller: "admin", Action: "certificate_issue", Result: "succeeded",
@@ -45,4 +46,32 @@ func TestRecorderWritesAndClassifiesFailures(t *testing.T) {
 	if err := nilRecorder.Record(context.Background(), Event{}); !errors.Is(err, ErrWrite) {
 		t.Fatalf("nil recorder error = %v, want ErrWrite", err)
 	}
+}
+
+func TestRecorderLogsAndCountsWriteFailures(t *testing.T) {
+	store, err := state.Open(t.Context(), ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics := observability.New()
+	recorder := NewRecorder(store, slog.New(slog.NewTextHandler(io.Discard, nil)), metrics)
+	_ = store.Close()
+	if err := recorder.Record(t.Context(), Event{Caller: "admin", Action: "test", Result: "succeeded"}); err == nil {
+		t.Fatal("Record against a closed store succeeded")
+	}
+	if metrics == nil {
+		t.Fatal("metrics missing")
+	}
+	if rendered := metrics.Render(); !containsMetric(rendered, "kouja_audit_failure_total") {
+		t.Fatalf("metrics = %q", rendered)
+	}
+}
+
+func containsMetric(rendered, name string) bool {
+	for _, line := range strings.Split(rendered, "\n") {
+		if strings.HasPrefix(line, name) {
+			return true
+		}
+	}
+	return false
 }

@@ -26,9 +26,10 @@ func TestRevokeExternalCertificate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	certPath, keyPath := testCA(t)
 	certDir := t.TempDir()
+	//nolint:gosec // test directory needs execute permission
 	if err := os.Chmod(certDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +46,7 @@ func TestRevokeExternalCertificate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	caPEM, err := os.ReadFile(certPath)
+	caPEM, err := os.ReadFile(certPath) //nolint:gosec // test file
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +55,7 @@ func TestRevokeExternalCertificate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	keyPEM, err := os.ReadFile(keyPath)
+	keyPEM, err := os.ReadFile(keyPath) //nolint:gosec // test file
 	if err != nil {
 		t.Fatal(err)
 	}

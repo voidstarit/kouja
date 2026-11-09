@@ -28,7 +28,7 @@ func TestCertificateRegistryLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	now := time.Now().UTC()
 	first := testCertificate("a1", now)
 	second := testCertificate("b2", now.Add(time.Second))
@@ -119,7 +119,7 @@ func TestExpiredCertificateAndAuditEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	now := time.Now().UTC()
 	expired := testCertificate("expired", now.Add(-2*time.Hour))
 	expired.NotAfter = now.Add(-time.Hour)

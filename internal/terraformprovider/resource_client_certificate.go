@@ -76,7 +76,12 @@ func (r *clientCertificateResource) Create(ctx context.Context, request resource
 	}
 	ttl := int32(0)
 	if !plan.TTLDays.IsNull() && !plan.TTLDays.IsUnknown() {
-		ttl = int32(plan.TTLDays.ValueInt64())
+		ttlValue := plan.TTLDays.ValueInt64()
+		if ttlValue < 0 || ttlValue > 365 {
+			response.Diagnostics.AddError("Invalid ttl_days", "ttl_days must be between 0 and 365")
+			return
+		}
+		ttl = int32(ttlValue) //nolint:gosec // validated range
 	}
 	issued, err := data.client.IssueCertificate(ctx, plan.Role.ValueString(), plan.Name.ValueString(), ttl, uuid.NewString())
 	if err != nil {

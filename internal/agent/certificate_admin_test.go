@@ -44,7 +44,7 @@ func TestAdminServiceCertificateRPCs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	now := time.Now().UTC()
 	issued := pki.IssuedCertificate{
 		CertificatePEM: "cert", PrivateKeyPEM: "key", ClientCAPEM: "ca", SerialNumber: "serial",

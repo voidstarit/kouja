@@ -46,7 +46,7 @@ func testCA(t *testing.T) (certPath, keyPath string) {
 	dir := t.TempDir()
 	certPath = filepath.Join(dir, "client-ca.crt")
 	keyPath = filepath.Join(dir, "ca.key")
-	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o644); err != nil {
+	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}), 0o600); err != nil {
@@ -60,9 +60,10 @@ func TestIssueAndRevoke(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	certPath, keyPath := testCA(t)
 	certDir := t.TempDir()
+	//nolint:gosec // test directory needs execute permission
 	if err := os.Chmod(certDir, 0o700); err != nil {
 		t.Fatal(err)
 	}

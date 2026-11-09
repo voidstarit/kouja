@@ -64,7 +64,7 @@ func TestAdminUICertificatePKIRoutes(t *testing.T) {
 	server.options.Registry = fakeRegistry{page: pki.CertificatePage{Certificates: []pki.CertificateSummary{{SerialNumber: "serial", Role: "admin", Name: "bootstrap", NotAfter: now.Add(time.Hour)}}}, record: pki.CertificateRecord{SerialNumber: "serial", Role: "admin", Name: "bootstrap", CertFile: "/tmp/admin-bootstrap-serial.crt", NotAfter: now.Add(time.Hour), Revoked: true}}
 	server.options.ExternalRevoker = fakeExternal{record: pki.CertificateRecord{SerialNumber: "external", Role: "admin", Name: "old", Revoked: true}}
 	path := filepath.Join(t.TempDir(), "admin-bootstrap-serial.crt")
-	if err := os.WriteFile(path, []byte("certificate"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("certificate"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	server.options.Files = fakeFiles{path: path}
