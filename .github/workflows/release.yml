@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to build and attach to its release (for example v0.1.0)"
+        description: "Release tag to build (for example v0.1.0). The workflow creates it from the current ref if it does not exist."
         required: true
         type: string
 
@@ -28,8 +28,22 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
+
+      - name: Resolve release source
+        run: |
+          git fetch --tags --force
+          if git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}" >/dev/null 2>&1; then
+            git checkout --detach "${RELEASE_TAG}"
+            echo "TAG_EXISTS=true" >> "$GITHUB_ENV"
+          else
+            if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]; then
+              echo "tag ${RELEASE_TAG} does not exist" >&2
+              exit 1
+            fi
+            echo "TAG_EXISTS=false" >> "$GITHUB_ENV"
+            echo "tag ${RELEASE_TAG} does not exist; building ${GITHUB_REF} and creating it from this commit"
+          fi
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -105,11 +119,16 @@ jobs:
               "dist/${RELEASE_NAME}/${PROVIDER_ASSET}.sha256" \
               --clobber
           else
-            gh release create "${RELEASE_TAG}" \
-              "${ARCHIVE}" \
-              "${ARCHIVE}.sha256" \
-              "dist/${RELEASE_NAME}/${PROVIDER_ASSET}" \
-              "dist/${RELEASE_NAME}/${PROVIDER_ASSET}.sha256" \
-              --title "${RELEASE_TAG}" \
+            CREATE_ARGS=("${RELEASE_TAG}"
+              "${ARCHIVE}"
+              "${ARCHIVE}.sha256"
+              "dist/${RELEASE_NAME}/${PROVIDER_ASSET}"
+              "dist/${RELEASE_NAME}/${PROVIDER_ASSET}.sha256"
+              --title "${RELEASE_TAG}"
               --generate-notes
+            )
+            if [ "${TAG_EXISTS}" != "true" ]; then
+              CREATE_ARGS+=(--target "$(git rev-parse HEAD)")
+            fi
+            gh release create "${CREATE_ARGS[@]}"
           fi

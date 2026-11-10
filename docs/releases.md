@@ -21,9 +21,13 @@ as a GitHub release.
    git push origin v0.1.0
    ```
 
-4. The `Release` workflow runs on the tag, builds the archive, uploads it to
-   the tag's GitHub release, and generates release notes. Edit the release notes
-   if additional operational guidance is needed.
+   Alternatively, run **Actions → Release → Run workflow** with the desired
+   tag. If the tag does not exist, the workflow builds the selected ref and
+   creates the tag at that commit when it publishes the release.
+
+4. The `Release` workflow builds the archive, uploads it to the tag's GitHub
+   release, and generates release notes. Edit the release notes if additional
+   operational guidance is needed.
 
 The tag must start with `v` (`v*`). The provider release asset omits the `v`
 prefix, for example `terraform-provider-kouja_0.1.0_linux_amd64`.
