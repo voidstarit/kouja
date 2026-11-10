@@ -36,6 +36,24 @@ func (metrics *Metrics) Set(name string, value float64) {
 	metrics.mu.Unlock()
 }
 
+// Snapshot returns copies of the legacy counter and gauge values.
+func (metrics *Metrics) Snapshot() (map[string]int64, map[string]float64) {
+	counters := make(map[string]int64)
+	gauges := make(map[string]float64)
+	if metrics == nil {
+		return counters, gauges
+	}
+	metrics.mu.Lock()
+	defer metrics.mu.Unlock()
+	for name, value := range metrics.counters {
+		counters[name] = value
+	}
+	for name, value := range metrics.gauges {
+		gauges[name] = value
+	}
+	return counters, gauges
+}
+
 func (metrics *Metrics) Handler() http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
 		response.Header().Set("Content-Type", "text/plain; version=0.0.4")

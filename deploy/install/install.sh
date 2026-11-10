@@ -103,6 +103,8 @@ fi
 cat <<'EOF'
 kouja is installed.
 Firewall ports: 9443/tcp control, 3260/tcp iSCSI, 4420/tcp NVMe-oF.
+Optional metrics listener: 9100/tcp when observability.metrics.enabled is true;
+it is loopback-only by default.
 The optional admin_ui listener is disabled. If enabled, it is loopback-only
 and has no authentication; any local process that can reach it is
 root-equivalent. Do not proxy or port-forward it and use it only on a

@@ -45,7 +45,7 @@ serialized per volume and per volume group.
 | Credentials | AES-256-GCM encrypted at rest; per-attachment rotation; node grants. |
 | Recovery | Startup and periodic reconciliation, drift reporting, and admin actions. |
 | Kubernetes | CSI controller and node plugin for provisioning, attach/detach, mount, expansion, and cleanup. |
-| Observability | `/healthz`, `/readyz`, Prometheus metrics, structured logs, and audit rows. |
+| Observability | `/healthz`, `/readyz`, mTLS and optional plaintext metrics listeners, OpenTelemetry per-LV metrics, structured logs, and audit rows. |
 | Local admin UI | Optional loopback-only configuration and status page; no authentication, disabled by default. |
 
 Not supported by v1: thin provisioning, snapshots, clones, replication,
@@ -711,6 +711,8 @@ docs/                        design, kernel, CSI, and validation records
   requirements
 - [End-to-end validation](docs/e2e.md) — tested iSCSI, NVMe/TCP, CSI, drain,
   node-failure, and expansion runs
+- [OpenTelemetry metrics](docs/observability.md) — per-LV OTLP metrics and
+  configuration
 - [Phase 0 readiness](docs/phase0.md) — kernel matrix and validation findings
 - [Target-manager decision](docs/decisions/target-manager.md) — why kouja uses
   direct configfs instead of targetcli/nvmetcli

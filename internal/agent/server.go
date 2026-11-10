@@ -38,6 +38,7 @@ type Server struct {
 	tlsConfig   *tls.Config
 	ready       func() bool
 	metrics     *observability.Metrics
+	otel        *observability.OTel
 	revocations RevocationChecker
 }
 
@@ -55,6 +56,14 @@ func WithReadiness(ready func() bool) ServerOption {
 func WithMetrics(metrics *observability.Metrics) ServerOption {
 	return func(server *Server) {
 		server.metrics = metrics
+	}
+}
+
+// WithOTelMetrics serves the pull-based OpenTelemetry registry, including the
+// legacy metrics registered in Metrics, from /metrics.
+func WithOTelMetrics(otel *observability.OTel) ServerOption {
+	return func(server *Server) {
+		server.otel = otel
 	}
 }
 
@@ -125,6 +134,10 @@ func NewServer(cfg *config.Config, volumeService koujav1.VolumeServiceServer, ad
 			return
 		}
 		if request.URL.Path == "/metrics" {
+			if server.otel != nil {
+				server.otel.Handler().ServeHTTP(response, request)
+				return
+			}
 			if server.metrics == nil {
 				response.WriteHeader(http.StatusNotFound)
 				return

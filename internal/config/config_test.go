@@ -234,3 +234,50 @@ func TestParseCoreDefersBackupValidation(t *testing.T) {
 		t.Fatal("empty core config path did not fail")
 	}
 }
+
+func TestObservabilityOTelConfig(t *testing.T) {
+	cfg, err := Parse([]byte(validConfig))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Observability.OTel.ServiceName != "kouja-agent" || cfg.Observability.OTel.Enabled {
+		t.Fatalf("OTel defaults = %#v", cfg.Observability.OTel)
+	}
+	if cfg.Observability.Metrics.Enabled || cfg.Observability.Metrics.Address != "127.0.0.1:9100" {
+		t.Fatalf("metrics defaults = %#v", cfg.Observability.Metrics)
+	}
+	withOTel := validConfig + `
+observability:
+  otel:
+    enabled: true
+    service_name: custom-agent
+`
+	cfg, err = Parse([]byte(withOTel))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Observability.OTel.Enabled || cfg.Observability.OTel.ServiceName != "custom-agent" {
+		t.Fatalf("OTel config = %#v", cfg.Observability.OTel)
+	}
+	withMetrics := validConfig + `
+observability:
+  metrics:
+    enabled: true
+    address: 0.0.0.0:9100
+`
+	cfg, err = Parse([]byte(withMetrics))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Observability.Metrics.Enabled || cfg.Observability.Metrics.Address != "0.0.0.0:9100" {
+		t.Fatalf("metrics config = %#v", cfg.Observability.Metrics)
+	}
+	if _, err := Parse([]byte(validConfig + `
+observability:
+  metrics:
+    enabled: true
+    address: bad
+`)); err == nil {
+		t.Fatal("invalid metrics address did not fail")
+	}
+}

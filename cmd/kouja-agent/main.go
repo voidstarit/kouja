@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -102,6 +103,36 @@ func run() error {
 	classMap := agent.NewClassMap(cfg.Storage.Classes, *configPath)
 	vgManager := agent.NewVGManager(store, lvmBackend, classMap)
 	metrics := observability.New()
+	otelReporter, err := observability.NewOTel(context.Background(), observability.OTelOptions{
+		Enabled:        cfg.Observability.OTel.Enabled,
+		ServiceName:    cfg.Observability.OTel.ServiceName,
+		ServiceVersion: agentVersion,
+		HostUUID:       hostUUID,
+		StorageClass:   classMap.ClassName,
+		Logger:         logger,
+		Metrics:        metrics,
+		Volumes: func(ctx context.Context) ([]state.VolumeStatus, error) {
+			var statuses []state.VolumeStatus
+			err := store.Transact(ctx, func(tx state.Tx) error {
+				values, err := tx.ListVolumeStatusesAll()
+				statuses = values
+				return err
+			})
+			return statuses, err
+		},
+	})
+	if err != nil {
+		logger.Error("OpenTelemetry metrics disabled", "error", err)
+	}
+	if otelReporter != nil {
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := otelReporter.Shutdown(shutdownCtx); err != nil {
+				logger.Error("OpenTelemetry shutdown failed", "error", err)
+			}
+		}()
+	}
 	auditRecorder := audit.NewRecorder(store, logger, metrics)
 	validators := naming.NewValidators()
 	vgClassManager := agent.NewVGClassManager(vgManager, classMap, vgClassGate, auditRecorder)
@@ -158,10 +189,37 @@ func run() error {
 	}
 	adminOptions = append(adminOptions, agent.WithCertificateService(pkiService, pkiService, pkiService, pkiService))
 	adminService := agent.NewAdminService(store, lvmBackend, adminOptions...)
-	serverOptions := []agent.ServerOption{agent.WithReadiness(ready.Load), agent.WithMetrics(metrics), agent.WithRevocationChecker(pkiService)}
+	serverOptions := []agent.ServerOption{agent.WithReadiness(ready.Load), agent.WithMetrics(metrics), agent.WithOTelMetrics(otelReporter), agent.WithRevocationChecker(pkiService)}
 	server, err := agent.NewServer(cfg, volumeService, adminService, serverOptions...)
 	if err != nil {
 		return err
+	}
+	var metricsServer *observability.HTTPServer
+	var metricsDone chan struct{}
+	if cfg.Observability.Metrics.Enabled {
+		metricsHandler := metrics.Handler()
+		if otelReporter != nil {
+			metricsHandler = otelReporter.Handler()
+		}
+		metricsServer, err = observability.NewHTTPServer(cfg.Observability.Metrics.Address, http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			if request.URL.Path != "/metrics" {
+				http.NotFound(response, request)
+				return
+			}
+			metricsHandler.ServeHTTP(response, request)
+		}))
+		if err != nil {
+			logger.Error("metrics listener failed to start", "error", err)
+		} else {
+			metricsDone = make(chan struct{})
+			logger.Warn("plaintext metrics listener enabled without authentication", "address", metricsServer.Addr().String())
+			go func() {
+				defer close(metricsDone)
+				if err := metricsServer.Serve(); err != nil {
+					logger.Error("metrics listener stopped", "error", err)
+				}
+			}()
+		}
 	}
 	metrics.Set("kouja_admin_ui_up", 0)
 	adminServer := startAdminServer(cfg, adminui.Options{
@@ -222,9 +280,22 @@ func run() error {
 		}
 	}
 
+	shutdownMetrics := func() {
+		if metricsServer == nil {
+			return
+		}
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = metricsServer.Shutdown(shutdownCtx)
+		cancel()
+		if metricsDone != nil {
+			<-metricsDone
+		}
+	}
+
 	select {
 	case <-ctx.Done():
 		shutdownAdmin()
+		shutdownMetrics()
 		server.GracefulStop()
 		<-reconcileDone
 		<-certDone
@@ -232,6 +303,7 @@ func run() error {
 	case err := <-serveErr:
 		ready.Store(false)
 		shutdownAdmin()
+		shutdownMetrics()
 		server.Stop()
 		<-reconcileDone
 		<-certDone

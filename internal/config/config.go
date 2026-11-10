@@ -29,6 +29,7 @@ type Config struct {
 	Targets              TargetsConfig              `yaml:"targets"`
 	Operations           OperationsConfig           `yaml:"operations"`
 	Admission            AdmissionConfig            `yaml:"admission"`
+	Observability        ObservabilityConfig        `yaml:"observability"`
 	State                StateConfig                `yaml:"state"`
 	CertificateAuthority CertificateAuthorityConfig `yaml:"certificate_authority"`
 }
@@ -139,6 +140,21 @@ type AdmissionConfig struct {
 	CapacityRequestsPerSec  int `yaml:"capacity_requests_per_second"`
 }
 
+type ObservabilityConfig struct {
+	Metrics MetricsConfig `yaml:"metrics"`
+	OTel    OTelConfig    `yaml:"otel"`
+}
+
+type MetricsConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Address string `yaml:"address"`
+}
+
+type OTelConfig struct {
+	Enabled     bool   `yaml:"enabled"`
+	ServiceName string `yaml:"service_name"`
+}
+
 type StateConfig struct {
 	BackupDir                  string         `yaml:"backup_dir"`
 	BackupTarget               string         `yaml:"backup_target"`
@@ -221,6 +237,10 @@ func Default() Config {
 			MaxConcurrentOperations: 64,
 			PerCallerOperations:     10,
 			CapacityRequestsPerSec:  10,
+		},
+		Observability: ObservabilityConfig{
+			Metrics: MetricsConfig{Address: "127.0.0.1:9100"},
+			OTel:    OTelConfig{ServiceName: "kouja-agent"},
 		},
 		State: StateConfig{
 			BackupDir:                  "/var/lib/kouja/backups",
@@ -346,6 +366,12 @@ func (cfg *Config) applyDefaults() {
 			cfg.Operations.StepTimeoutSecs[action] = defaults.Operations.StepTimeoutSecs[action]
 		}
 	}
+	if strings.TrimSpace(cfg.Observability.OTel.ServiceName) == "" {
+		cfg.Observability.OTel.ServiceName = defaults.Observability.OTel.ServiceName
+	}
+	if strings.TrimSpace(cfg.Observability.Metrics.Address) == "" {
+		cfg.Observability.Metrics.Address = defaults.Observability.Metrics.Address
+	}
 }
 
 func (cfg *Config) ValidateCore() error {
@@ -428,6 +454,14 @@ func (cfg *Config) ValidateCore() error {
 	}
 	if cfg.Admission.MaxConcurrentOperations <= 0 || cfg.Admission.PerCallerOperations <= 0 || cfg.Admission.CapacityRequestsPerSec <= 0 {
 		return fmt.Errorf("%w: admission values must be positive", ErrInvalid)
+	}
+	if cfg.Observability.OTel.Enabled && strings.TrimSpace(cfg.Observability.OTel.ServiceName) == "" {
+		return fmt.Errorf("%w: observability.otel.service_name is required", ErrInvalid)
+	}
+	if cfg.Observability.Metrics.Enabled {
+		if err := validateHostPort("observability.metrics.address", cfg.Observability.Metrics.Address); err != nil {
+			return err
+		}
 	}
 	if cfg.State.IntegrityCheckIntervalSecs <= 0 || cfg.State.ReconcileIntervalSeconds <= 0 ||
 		cfg.State.AuditRetentionDays <= 0 {
