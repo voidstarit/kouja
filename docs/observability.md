@@ -1,25 +1,30 @@
 # OpenTelemetry metrics
 
-`kouja-agent` exposes per-logical-volume metrics on its existing mTLS
-`/metrics` endpoint. The service does not push metrics. An OpenTelemetry
-Collector using the Prometheus receiver, or a Prometheus server, pulls them.
+`kouja-agent` exposes per-logical-volume metrics using the OpenTelemetry
+metrics SDK and a Prometheus exporter. Metrics are pull-based: a Prometheus
+server or an OpenTelemetry Collector Prometheus receiver scrapes the agent; the
+agent does not push metrics.
 
 ## Configuration
 
 ```yaml
 observability:
+  metrics:
+    enabled: true
+    address: 127.0.0.1:9100
   otel:
     enabled: true
     service_name: kouja-agent
 ```
 
-OpenTelemetry metric instruments are disabled by default. When enabled, the
-agent registers them with the same Prometheus registry as the existing kouja
-metrics, so a single scrape returns both.
-
-The endpoint remains protected by the agent's normal mTLS listener. Configure
-the collector's Prometheus receiver with a client certificate trusted by the
-agent's client CA, or place an authenticated proxy in front of `/metrics`.
+- `observability.metrics.enabled` starts a dedicated plaintext HTTP listener
+  for `/metrics`. It defaults to disabled and loopback-only.
+- `observability.otel.enabled` registers the per-LV OpenTelemetry instruments.
+  It defaults to disabled.
+- The existing mTLS `/metrics` endpoint on port 9443 remains available for
+  administrative and legacy scrapes.
+- If the dedicated metrics listener is bound to a non-loopback address, protect
+  it with a host firewall or network ACL. It has no authentication.
 
 ## Metrics per LV
 
@@ -53,7 +58,7 @@ to the admin UI's 256-row page. Cardinality scales with the number of LVs.
 
 ## Example collector scrape
 
-A typical Prometheus receiver configuration:
+A typical Prometheus receiver configuration for the dedicated listener:
 
 ```yaml
 receivers:
@@ -61,14 +66,11 @@ receivers:
     config:
       scrape_configs:
         - job_name: kouja
-          scheme: https
+          scheme: http
           metrics_path: /metrics
           static_configs:
-            - targets: ["storage-host:9443"]
-          tls_config:
-            ca_file: /etc/kouja/client-ca.crt
-            cert_file: /etc/kouja/collector.crt
-            key_file: /etc/kouja/collector.key
+            - targets: ["storage-host:9100"]
 ```
 
-The existing legacy kouja metrics remain available on the same endpoint.
+To scrape the mTLS listener instead, use `scheme: https`, port `9443`, and a
+client certificate trusted by the agent's client CA.

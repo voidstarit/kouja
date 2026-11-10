@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -193,6 +194,33 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	var metricsServer *observability.HTTPServer
+	var metricsDone chan struct{}
+	if cfg.Observability.Metrics.Enabled {
+		metricsHandler := metrics.Handler()
+		if otelReporter != nil {
+			metricsHandler = otelReporter.Handler()
+		}
+		metricsServer, err = observability.NewHTTPServer(cfg.Observability.Metrics.Address, http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			if request.URL.Path != "/metrics" {
+				http.NotFound(response, request)
+				return
+			}
+			metricsHandler.ServeHTTP(response, request)
+		}))
+		if err != nil {
+			logger.Error("metrics listener failed to start", "error", err)
+		} else {
+			metricsDone = make(chan struct{})
+			logger.Warn("plaintext metrics listener enabled without authentication", "address", metricsServer.Addr().String())
+			go func() {
+				defer close(metricsDone)
+				if err := metricsServer.Serve(); err != nil {
+					logger.Error("metrics listener stopped", "error", err)
+				}
+			}()
+		}
+	}
 	metrics.Set("kouja_admin_ui_up", 0)
 	adminServer := startAdminServer(cfg, adminui.Options{
 		ConfigPath: *configPath, Config: cfg, ConfigData: configData,
@@ -252,9 +280,22 @@ func run() error {
 		}
 	}
 
+	shutdownMetrics := func() {
+		if metricsServer == nil {
+			return
+		}
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = metricsServer.Shutdown(shutdownCtx)
+		cancel()
+		if metricsDone != nil {
+			<-metricsDone
+		}
+	}
+
 	select {
 	case <-ctx.Done():
 		shutdownAdmin()
+		shutdownMetrics()
 		server.GracefulStop()
 		<-reconcileDone
 		<-certDone
@@ -262,6 +303,7 @@ func run() error {
 	case err := <-serveErr:
 		ready.Store(false)
 		shutdownAdmin()
+		shutdownMetrics()
 		server.Stop()
 		<-reconcileDone
 		<-certDone

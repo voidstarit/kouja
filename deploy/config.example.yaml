@@ -74,6 +74,9 @@ admission:
   per_caller_operations: 10
   capacity_requests_per_second: 10
 observability:
+  metrics:
+    enabled: false
+    address: 127.0.0.1:9100   # plaintext scrape listener; keep loopback or firewall it
   otel:
     enabled: false
     service_name: kouja-agent
