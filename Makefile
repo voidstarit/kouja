@@ -7,6 +7,13 @@ CONTROLLER_GEN ?= controller-gen
 COVERAGE_OUT ?= coverage.out
 VERSION ?= $(shell git describe --tags --always --dirty)
 PROVIDER_PACKAGES ?= ./cmd/terraform-provider-kouja/... ./internal/terraformprovider/...
+CMD_PACKAGES ?= $(shell $(GO) list ./cmd/...)
+RELEASE_DIR ?= dist
+RELEASE_NAME ?= kouja-$(VERSION)-linux-amd64
+RELEASE_STAGE ?= $(RELEASE_DIR)/$(RELEASE_NAME)
+RELEASE_ARCHIVE ?= $(RELEASE_DIR)/$(RELEASE_NAME).tar.gz
+PROVIDER_VERSION ?= $(patsubst v%,%,$(VERSION))
+PROVIDER_RELEASE_NAME ?= terraform-provider-kouja_$(PROVIDER_VERSION)_linux_amd64
 # The Terraform provider is a separate deliverable with its own test target.
 COVERAGE_PACKAGES ?= $(shell $(GO) list ./internal/... | grep -v '/internal/terraformprovider$$')
 COVERAGE_FLOOR ?= 80
@@ -15,7 +22,7 @@ COVERAGE_FLOOR ?= 80
 # use explicit source package roots instead.
 GO_PACKAGES ?= ./api/... ./cmd/... ./gen/... ./hack/... ./internal/... ./test/...
 
-.PHONY: all binaries build build-go ui clean-assets test test-bdd lint proto generate tools integration e2e fault perf upgrade coverage coverage-check csi-sanity phase0 build-provider test-provider provider-acceptance
+.PHONY: all binaries release build build-go ui clean-assets test test-bdd lint proto generate tools integration e2e fault perf upgrade coverage coverage-check csi-sanity phase0 build-provider test-provider provider-acceptance
 
 # Release layout: build the embedded UI and all command binaries in bin/.
 all: binaries
@@ -32,6 +39,36 @@ binaries: build
 
 build: ui
 	$(GO) build $(GO_PACKAGES)
+
+# Build the linux/amd64 release archive published by the release workflow.
+# Every command under ./cmd is compiled statically; the provider gets its
+# version in the release filename and ldflags.
+release: ui
+	rm -rf "$(RELEASE_STAGE)" "$(RELEASE_ARCHIVE)" "$(RELEASE_ARCHIVE).sha256"
+	mkdir -p "$(RELEASE_STAGE)" "$(RELEASE_STAGE)/deploy/install" "$(RELEASE_STAGE)/deploy/systemd" "$(RELEASE_STAGE)/docs"
+	@for package in $(CMD_PACKAGES); do \
+		name=$$(basename "$$package"); \
+		output="$(RELEASE_STAGE)/$$name"; \
+		ldflags="-s -w"; \
+		if [ "$$name" = "kouja-agent" ]; then \
+			ldflags="$$ldflags -X main.agentVersion=$(VERSION)"; \
+		elif [ "$$name" = "terraform-provider-kouja" ]; then \
+			output="$(RELEASE_STAGE)/$(PROVIDER_RELEASE_NAME)"; \
+			ldflags="$$ldflags -X main.version=$(PROVIDER_VERSION)"; \
+		fi; \
+		CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -trimpath -ldflags "$$ldflags" -o "$$output" "$$package"; \
+	done
+	install -m 0644 deploy/config.example.yaml "$(RELEASE_STAGE)/config.example.yaml"
+	install -m 0755 deploy/kouja-init.sh "$(RELEASE_STAGE)/kouja-init.sh"
+	install -m 0755 deploy/install/install.sh "$(RELEASE_STAGE)/deploy/install/install.sh"
+	install -m 0644 deploy/systemd/* "$(RELEASE_STAGE)/deploy/systemd/"
+	install -m 0644 README.md LICENSE "$(RELEASE_STAGE)/"
+	install -m 0644 docs/*.md "$(RELEASE_STAGE)/docs/"
+	cd "$(RELEASE_STAGE)" && sha256sum "$(PROVIDER_RELEASE_NAME)" > "$(PROVIDER_RELEASE_NAME).sha256"
+	cd "$(RELEASE_STAGE)" && sha256sum kouja-agent kouja-backup kouja-csi-controller kouja-csi-node kouja-restore "$(PROVIDER_RELEASE_NAME)" "$(PROVIDER_RELEASE_NAME).sha256" config.example.yaml kouja-init.sh README.md LICENSE > SHA256SUMS
+	tar -C "$(RELEASE_DIR)" -czf "$(RELEASE_ARCHIVE)" "$(RELEASE_NAME)"
+	cd "$(RELEASE_DIR)" && sha256sum "$(RELEASE_NAME).tar.gz" > "$(RELEASE_NAME).tar.gz.sha256"
+	@printf 'created %s\n' "$(RELEASE_ARCHIVE)"
 
 # Node-free build. Clean generated assets first so a previous full build does
 # not accidentally embed the browser bundle.
