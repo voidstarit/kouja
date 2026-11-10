@@ -711,8 +711,10 @@ docs/                        design, kernel, CSI, and validation records
   requirements
 - [End-to-end validation](docs/e2e.md) — tested iSCSI, NVMe/TCP, CSI, drain,
   node-failure, and expansion runs
-- [OpenTelemetry metrics](docs/observability.md) — per-LV OTLP metrics and
+- [OpenTelemetry metrics](docs/observability.md) — per-LV pull metrics and
   configuration
+- [Releases](docs/releases.md) — tagging, static binary builds, and release
+  archives
 - [Phase 0 readiness](docs/phase0.md) — kernel matrix and validation findings
 - [Target-manager decision](docs/decisions/target-manager.md) — why kouja uses
   direct configfs instead of targetcli/nvmetcli

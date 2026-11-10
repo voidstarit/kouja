@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and attach to its release (for example v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build linux/amd64 release
+    runs-on: ubuntu-latest
+    if: github.event_name != 'release' || github.event.release.author.login != 'github-actions[bot]'
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Test
+        run: make test
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build static release binaries
+        run: make release VERSION="${RELEASE_TAG}"
+
+      - name: Verify release archive
+        run: |
+          RELEASE_NAME="kouja-${RELEASE_TAG}-linux-amd64"
+          PROVIDER_ASSET="terraform-provider-kouja_${RELEASE_TAG#v}_linux_amd64"
+          ARCHIVE="dist/${RELEASE_NAME}.tar.gz"
+          STAGE="dist/${RELEASE_NAME}"
+          test -f "${ARCHIVE}"
+          test -f "${ARCHIVE}.sha256"
+          tar -tzf "${ARCHIVE}"
+          for binary in kouja-agent kouja-backup kouja-csi-controller kouja-csi-node kouja-restore "${PROVIDER_ASSET}"; do
+            test -x "${STAGE}/${binary}"
+            file "${STAGE}/${binary}" | grep -q "statically linked"
+          done
+          test -f "${STAGE}/config.example.yaml"
+          test -f "${STAGE}/kouja-init.sh"
+          test -f "${STAGE}/deploy/install/install.sh"
+          test -f "${STAGE}/deploy/systemd/kouja-agent.service"
+          test -f "${STAGE}/deploy/systemd/kouja-backup.service"
+          test -f "${STAGE}/deploy/systemd/kouja-backup.timer"
+          test -f "${STAGE}/README.md"
+          test -f "${STAGE}/LICENSE"
+          test -f "${STAGE}/SHA256SUMS"
+          test -f "${STAGE}/${PROVIDER_ASSET}.sha256"
+          (cd "${STAGE}" && sha256sum -c SHA256SUMS)
+          (cd "${STAGE}" && sha256sum -c "${PROVIDER_ASSET}.sha256")
+          (cd dist && sha256sum -c "${RELEASE_NAME}.tar.gz.sha256")
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kouja-${{ env.RELEASE_TAG }}-linux-amd64
+          path: |
+            dist/kouja-${{ env.RELEASE_TAG }}-linux-amd64.tar.gz
+            dist/kouja-${{ env.RELEASE_TAG }}-linux-amd64.tar.gz.sha256
+            dist/kouja-${{ env.RELEASE_TAG }}-linux-amd64/terraform-provider-kouja_*
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_NAME="kouja-${RELEASE_TAG}-linux-amd64"
+          PROVIDER_ASSET="terraform-provider-kouja_${RELEASE_TAG#v}_linux_amd64"
+          ARCHIVE="dist/${RELEASE_NAME}.tar.gz"
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" \
+              "${ARCHIVE}" \
+              "${ARCHIVE}.sha256" \
+              "dist/${RELEASE_NAME}/${PROVIDER_ASSET}" \
+              "dist/${RELEASE_NAME}/${PROVIDER_ASSET}.sha256" \
+              --clobber
+          else
+            gh release create "${RELEASE_TAG}" \
+              "${ARCHIVE}" \
+              "${ARCHIVE}.sha256" \
+              "dist/${RELEASE_NAME}/${PROVIDER_ASSET}" \
+              "dist/${RELEASE_NAME}/${PROVIDER_ASSET}.sha256" \
+              --title "${RELEASE_TAG}" \
+              --generate-notes
+          fi

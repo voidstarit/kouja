@@ -31,10 +31,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const (
-	agentVersion = "dev"
-	apiVersion   = "v1"
-)
+var agentVersion = "dev"
+
+const apiVersion = "v1"
 
 func main() {
 	if err := run(); err != nil {
