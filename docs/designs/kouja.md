@@ -753,7 +753,7 @@ The agent fails closed if SQLite is missing or corrupt, if the host identity fil
 5. Load the host UUID from the `settings` table and compare it with `/var/lib/kouja/host-id`. If the file is missing or differs while the database has volumes, fail closed. On a fresh host with no managed LVs, create the file and the database row.
 6. Check `/var/lib/kouja/secret.key`. If it is missing or its fingerprint differs while encrypted credentials exist, fail closed. On a fresh host with no credentials, generate it.
 7. Read the kernel boot ID from `/proc/sys/kernel/random/boot_id`. Store it in `settings`.
-8. Check dependencies: configfs mounted, LIO and nvmet modules loaded, `nvmet_tcp` loaded, `tlshd` active when TLS-PSK is enabled, and LVM tools present.
+8. Check dependencies: configfs mounted, the LIO and nvmet fabrics available under configfs (built in or loaded as modules), `nvmet_tcp` available, `tlshd` active when TLS-PSK is enabled, and LVM tools present.
 9. Start the gRPC/HTTP and metrics listener. `/healthz` is live, `/readyz` returns 503 with `Retry-After`, and mutations return `Unavailable`.
 10. Verify each registered VG: exists, UUID matches, eligible, not partial, and does not contain `data_dir` or `backup_dir`. A missing or changed VG marks its volumes `drift`.
 11. Activate every managed LV with `lvchange --activate y`, run `udevadm settle`, and wait for `/dev/<vg>/<lv>` or `/dev/mapper/<vg>-<lv>`.
