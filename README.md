@@ -90,8 +90,9 @@ The reference host is **Debian 13 with Linux 6.12**. Debian 12/Linux 6.1 is not
 supported for the TLS-required NVMe path.
 
 - `lvm2`
-- kernel modules: `target_core_mod`, `target_core_iblock`,
-  `iscsi_target_mod`, `nvmet`, `nvmet_tcp`
+- kernel target support for `target_core_mod`, `target_core_iblock`,
+  `iscsi_target_mod`, `nvmet`, and `nvmet_tcp`, either built in (`=y`) or
+  loaded as modules (`=m`)
 - `CONFIG_NVME_TARGET_TCP_TLS=y` for NVMe/TCP
 - `ktls-utils` with `tlshd` active for NVMe/TCP
 - `nvme-cli` for PSK generation and validation

@@ -1,0 +1,29 @@
+.git
+.gitignore
+.github
+.idea
+.vscode
+.DS_Store
+
+# Build artifacts
+bin
+dist
+.tmp
+coverage.out
+*.test
+*.prof
+*.tar
+*.tar.gz
+*.tgz
+
+# Generated admin UI assets are rebuilt in the UI stage.
+internal/adminui/assets
+
+# Node dependencies and local build output
+web/node_modules
+web/dist
+web/.vite
+
+# Local scratch directories
+review_v1
+review_v2

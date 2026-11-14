@@ -58,7 +58,7 @@ The key ordering constraint is that `addr_tsas` and `addr_treq` must be written 
 
 ### Dependency footprint
 
-The production adapters need only Go, LVM tools, configfs, the target kernel modules, and `tlshd` for NVMe TLS. `targetcli`, `rtslib`, and `nvmetcli` were used for validation and cross-checking. They are not required at runtime and must not become implicit state managers. The test cleanup uses `targetcli` for robustness after failed partial setup; the production adapter must reproduce the direct teardown ordering.
+The production adapters need only Go, LVM tools, configfs, kernel target support (built in or loaded as modules), and `tlshd` for NVMe TLS. `targetcli`, `rtslib`, and `nvmetcli` were used for validation and cross-checking. They are not required at runtime and must not become implicit state managers. The test cleanup uses `targetcli` for robustness after failed partial setup; the production adapter must reproduce the direct teardown ordering.
 
 ### Failure behavior
 

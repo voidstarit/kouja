@@ -19,15 +19,22 @@ Other kernels are not certified by this test. A host must pass the capability pr
 The target requires:
 
 ```text
-CONFIG_TARGET_CORE=m
-CONFIG_ISCSI_TARGET=m
-CONFIG_TARGET_CORE_IBLOCK=m
-CONFIG_NVME_TARGET=m
-CONFIG_NVME_TARGET_TCP=m
+CONFIG_TARGET_CORE=y|m
+CONFIG_ISCSI_TARGET=y|m
+CONFIG_TARGET_CORE_IBLOCK=y|m
+CONFIG_NVME_TARGET=y|m
+CONFIG_NVME_TARGET_TCP=y|m
 CONFIG_NVME_TARGET_TCP_TLS=y
 CONFIG_NVME_TARGET_AUTH=y
 CONFIG_TLS=y
 ```
+
+The target core, iSCSI fabric, iblock backstore, and nvmet support may be built
+into the kernel (`=y`) or loaded as modules (`=m`). The agent accepts either
+build: it probes the configfs fabric directories under
+`/sys/kernel/config/target` and `/sys/kernel/config/nvmet`, which the kernel
+creates in both cases. Built-in modules do not necessarily appear under
+`/sys/module`, so the agent does not require those entries.
 
 The initiator-side validation host additionally requires `CONFIG_NVME_TCP_TLS=y`. The probe reports that symbol as optional for a storage-only host.
 
@@ -41,6 +48,9 @@ nvmet
 nvmet_tcp
 ```
 
+The reference tests used the modules above; the agent's startup check also
+accepts the equivalent built-in configuration.
+
 A host that lacks `CONFIG_NVME_TARGET_TCP_TLS` cannot serve the v1 NVMe-oF path because v1 requires TLS 1.3 PSK. It may still pass the basic LIO checks, but it must be rejected as a storage host.
 
 ## Packages
@@ -49,7 +59,7 @@ Required runtime packages:
 
 * `lvm2` for `lvs`, `vgs`, `pvs`, `lvcreate`, `lvextend`, `lvreduce`, and `lvremove`.
 * `ktls-utils` for `tlshd`; `tlshd` must be active and must include the `.nvme` keyring.
-* The kernel modules listed above.
+* The kernel target support listed above, built in or loadable.
 
 Initiator-side requirement for NVMe/TCP:
 
